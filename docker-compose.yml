@@ -1,0 +1,17 @@
+services:
+  web:
+    image: token-deployment-frontend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_PHANTASMA_NEXUS: ${NEXT_PUBLIC_PHANTASMA_NEXUS}
+    ports:
+      - "5001:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: "https://testnet.phantasma.info/rpc"
+      NEXT_PUBLIC_PHANTASMA_NEXUS: testnet
+    restart: unless-stopped

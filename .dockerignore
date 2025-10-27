@@ -1,0 +1,10 @@
+.git
+node_modules
+.next/cache
+.next/types
+npm-debug.log
+Dockerfile
+docker-compose.yml
+README.md
+*.local
+.env.local
