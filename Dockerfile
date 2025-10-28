@@ -45,7 +45,6 @@ ENV NODE_ENV=production \
 USER node
 
 # Copy only what the standalone server needs
-COPY --chown=node:node --from=builder /app/public ./public
 COPY --chown=node:node --from=builder /app/.next/standalone ./
 COPY --chown=node:node --from=builder /app/.next/static ./.next/static
 
