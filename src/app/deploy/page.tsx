@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DebugLogger } from "@/components/DebugLogger";
 import { RefreshCw, Plus, Trash2, Upload, ChevronDown } from "lucide-react";
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 /**
  * Deploy page
@@ -365,7 +366,10 @@ const DeployPage = observer(() => {
           <h1 className="text-3xl font-bold tracking-tight">Token Deployment</h1>
           <p className="text-muted-foreground">Deploy new Carbon tokens on Phantasma blockchain</p>
         </div>
-        <PhaAccountWidgetV1 state={phaCtx} />
+        <div className="flex items-center gap-2">
+          <PhaAccountWidgetV1 state={phaCtx} />
+          <ThemeToggle />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

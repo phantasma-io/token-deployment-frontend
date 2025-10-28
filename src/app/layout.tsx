@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
-import ThemeToggle from "@/components/ThemeToggle";
+import { ThemeProvider } from 'next-themes'
 import { PhantasmaProvider } from "@/components/PhantasmaProvider";
 
 export const metadata: Metadata = {
@@ -15,24 +15,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-        try {
-          var s = localStorage.getItem('theme');
-          document.documentElement.classList.toggle('dark', s ? s==='dark' : true);
-        } catch {}
-        `,
-          }}
-        />
-      </head>
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <PhantasmaProvider>
-          {children}
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            {children}
+          </ThemeProvider>
           <Toaster />
-          <ThemeToggle />
         </PhantasmaProvider>
       </body>
     </html>
