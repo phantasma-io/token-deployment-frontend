@@ -43,6 +43,8 @@ const DeployPage = observer(() => {
   const [isNFT, setIsNFT] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
+  const [tokenUrl, setTokenUrl] = useState("");
+  const [description, setDescription] = useState("");
   const [decimals, setDecimals] = useState<number>(8);
   const [lastFungibleDecimals, setLastFungibleDecimals] = useState<number>(8);
   const [maxSupply, setMaxSupply] = useState<string>("0");
@@ -51,8 +53,8 @@ const DeployPage = observer(() => {
   const [gasFeeCreateTokenSymbol, setGasFeeCreateTokenSymbol] = useState("10000000000");
   const [gasFeeMultiplier, setGasFeeMultiplier] = useState("10000");
   const [maxDataLimit, setMaxDataLimit] = useState("1000000000");
-  const [logoDataUri, setLogoDataUri] = useState<string | null>(null);
-  const [logoFileName, setLogoFileName] = useState<string | null>(null);
+  const [iconDataUri, setIconDataUri] = useState<string | null>(null);
+  const [iconFileName, setIconFileName] = useState<string | null>(null);
   const [metadataFields, setMetadataFields] = useState<
     { id: number; key: string; value: string }[]
   >([]);
@@ -187,6 +189,8 @@ const DeployPage = observer(() => {
   function resetForm() {
     setSymbol("");
     setName("");
+    setTokenUrl("");
+    setDescription("");
     setDecimals(8);
     setLastFungibleDecimals(8);
     setMaxSupply("0");
@@ -195,8 +199,8 @@ const DeployPage = observer(() => {
     setGasFeeCreateTokenSymbol("10000000000");
     setGasFeeMultiplier("10000");
     setMaxDataLimit("1000000000");
-    setLogoDataUri(null);
-    setLogoFileName(null);
+    setIconDataUri(null);
+    setIconFileName(null);
     setMetadataFields([]);
     setMetadataIdCounter(0);
     setIsNFT(false);
@@ -207,10 +211,12 @@ const DeployPage = observer(() => {
     addLog('🚀 handleDeploy started', {
       symbol,
       name,
+      url: tokenUrl,
+      description,
       isNFT,
       decimals,
       maxSupply,
-      has_logo: !!logoDataUri,
+      has_icon: !!iconDataUri,
       metadata_fields: metadataFields,
       wallet_connected: !!phaCtx?.conn,
       owner_address: phaCtx?.conn?.link?.account?.address
@@ -224,6 +230,26 @@ const DeployPage = observer(() => {
     if (!symbol || symbol.trim().length === 0) {
       addLog('❌ Symbol is required');
       toast.error("Symbol is required");
+      return;
+    }
+    if (!name.trim()) {
+      addLog('❌ Name is required');
+      toast.error("Name is required");
+      return;
+    }
+    if (!iconDataUri) {
+      addLog('❌ Icon is required');
+      toast.error("Icon is required");
+      return;
+    }
+    if (!tokenUrl.trim()) {
+      addLog('❌ URL is required');
+      toast.error("URL is required");
+      return;
+    }
+    if (!description.trim()) {
+      addLog('❌ Description is required');
+      toast.error("Description is required");
       return;
     }
 
@@ -263,13 +289,18 @@ const DeployPage = observer(() => {
 
     try {
       const ownerAddress = phaCtx.conn.link.account.address;
-      const metadataObj: Record<string, string> = {};
-      if (logoDataUri) {
-        metadataObj.logo = logoDataUri;
-      }
+      const metadataObj: Record<string, string> = {
+        name: name.trim(),
+        icon: iconDataUri,
+        url: tokenUrl.trim(),
+        description: description.trim(),
+      };
       metadataFields.forEach(({ key, value }) => {
         const trimmedKey = key.trim();
         if (!trimmedKey) return;
+        if (trimmedKey === "name" || trimmedKey === "icon" || trimmedKey === "url" || trimmedKey === "description") {
+          throw Error(`Reserved key cannot be used for extended properties ${trimmedKey}`);
+        }
         metadataObj[trimmedKey] = value;
       });
 
@@ -281,7 +312,9 @@ const DeployPage = observer(() => {
       addLog('🚀🚀 Deploying carbon token', {
         ownerAddress,
         symbol: symbol.trim(),
-        name: name.trim() || undefined,
+        name: name.trim(),
+        url: tokenUrl.trim(),
+        description: description.trim(),
         isNFT,
         decimals: decimals ?? 0,
         maxSupply: maxSupplyBig.toString(),
@@ -300,7 +333,7 @@ const DeployPage = observer(() => {
         conn: phaCtx.conn,
         ownerAddress,
         symbol: symbol.trim(),
-        name: name.trim() || undefined,
+        name: name.trim(),
         isNFT,
         decimals: decimals ?? 0,
         maxSupply: maxSupplyBig,
@@ -600,49 +633,6 @@ const DeployPage = observer(() => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Name (optional)</label>
-              <input
-                className="w-full rounded border px-2 py-1"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My token name"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label
-                  className={`block text-sm font-medium mb-1 ${isNFT ? "text-muted-foreground" : ""
-                    }`}
-                >
-                  Decimals
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-full rounded border px-2 py-1"
-                  value={decimals}
-                  onChange={(e) => {
-                    const value = Number(e.target.value);
-                    setDecimals(value);
-                    setLastFungibleDecimals(value);
-                  }}
-                  disabled={isNFT}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Max supply</label>
-                <input
-                  className="w-full rounded border px-2 py-1"
-                  value={maxSupply}
-                  onChange={(e) => setMaxSupply(e.target.value)}
-                  placeholder="0 for unlimited"
-                />
-              </div>
-            </div>
-
             <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -650,14 +640,28 @@ const DeployPage = observer(() => {
                     Metadata
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Optional fields that populate the token metadata
+                    Populate the required Carbon metadata (name, icon, url, description) and add optional extras as needed.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium">
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full rounded border px-2 py-1"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="My token name"
+                  />
+                </div>
+
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium">Logo</label>
+                  <label className="block text-sm font-medium">
+                    Icon <span className="text-red-500">*</span>
+                  </label>
                   <div className="flex items-center gap-3">
                     <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
                       <Upload size={16} />
@@ -669,63 +673,88 @@ const DeployPage = observer(() => {
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           if (!file) {
-                            setLogoDataUri(null);
-                            setLogoFileName(null);
+                            setIconDataUri(null);
+                            setIconFileName(null);
                             return;
                           }
                           const reader = new FileReader();
                           reader.onload = (loadEvt) => {
                             const result = loadEvt.target?.result;
                             if (typeof result === "string") {
-                              setLogoDataUri(result);
-                              setLogoFileName(file.name);
-                              addLog('🖼️ Logo loaded', {
+                              setIconDataUri(result);
+                              setIconFileName(file.name);
+                              addLog('🖼️ Icon loaded', {
                                 name: file.name,
                                 size: file.size,
                                 type: file.type,
                               });
                             } else {
-                              toast.error("Failed to read logo file");
-                              setLogoDataUri(null);
-                              setLogoFileName(null);
+                              toast.error("Failed to read icon file");
+                              setIconDataUri(null);
+                              setIconFileName(null);
                             }
                           };
                           reader.onerror = () => {
-                            toast.error("Failed to read logo file");
-                            setLogoDataUri(null);
-                            setLogoFileName(null);
+                            toast.error("Failed to read icon file");
+                            setIconDataUri(null);
+                            setIconFileName(null);
                           };
                           reader.readAsDataURL(file);
                         }}
                       />
                     </label>
                     <div className="flex-1 rounded border bg-background px-3 py-2 text-sm">
-                      {logoFileName ? (
-                        <span className="block truncate">{logoFileName}</span>
+                      {iconFileName ? (
+                        <span className="block truncate">{iconFileName}</span>
                       ) : (
                         <span className="text-muted-foreground">
                           No file selected
                         </span>
                       )}
                     </div>
-                    {logoFileName && (
+                    {iconFileName && (
                       <Button
                         type="button"
                         variant="ghost"
                         onClick={() => {
-                          setLogoDataUri(null);
-                          setLogoFileName(null);
+                          setIconDataUri(null);
+                          setIconFileName(null);
                         }}
                       >
                         Remove
                       </Button>
                     )}
                   </div>
-                  {logoDataUri && (
+                  {iconDataUri && (
                     <p className="text-xs text-muted-foreground break-all">
-                      {logoDataUri.slice(0, 48)}…
+                      {iconDataUri.slice(0, 48)}…
                     </p>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    URL <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    className="w-full rounded border px-2 py-1"
+                    value={tokenUrl}
+                    onChange={(e) => setTokenUrl(e.target.value)}
+                    placeholder="https://project.example"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium">
+                    Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    className="w-full rounded border px-2 py-1"
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Brief summary of the token purpose"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -751,7 +780,7 @@ const DeployPage = observer(() => {
                   <div className="space-y-2">
                     {metadataFields.length === 0 && (
                       <p className="text-xs text-muted-foreground">
-                        No custom fields. Click + to add key/value pairs.
+                        Add optional key/value pairs if the token needs extra metadata. Reserved keys (name, icon, url, description) are managed above.
                       </p>
                     )}
                     {metadataFields.map((field) => (
@@ -806,6 +835,39 @@ const DeployPage = observer(() => {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label
+                  className={`block text-sm font-medium mb-1 ${isNFT ? "text-muted-foreground" : ""
+                    }`}
+                >
+                  Decimals
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full rounded border px-2 py-1"
+                  value={decimals}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    setDecimals(value);
+                    setLastFungibleDecimals(value);
+                  }}
+                  disabled={isNFT}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Max supply</label>
+                <input
+                  className="w-full rounded border px-2 py-1"
+                  value={maxSupply}
+                  onChange={(e) => setMaxSupply(e.target.value)}
+                  placeholder="0 for unlimited"
+                />
               </div>
             </div>
 
