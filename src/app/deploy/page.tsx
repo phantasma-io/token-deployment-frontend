@@ -508,7 +508,11 @@ const DeployPage = observer(() => {
                     const name = t?.name;
                     const currentSupply = t?.currentSupply;
                     const maxSupply = t?.maxSupply;
-                    const isNFTItem = !primary.includes("Fungible");
+                    const flagList =
+                      typeof t?.flags === "string"
+                        ? t.flags.split(",").map((flag) => flag.trim().toLowerCase())
+                        : [];
+                    const isNFTItem = !flagList.includes("fungible");
                     const decimals = t?.decimals;
                     const isExpanded = !!expandedTokens[primary];
 
