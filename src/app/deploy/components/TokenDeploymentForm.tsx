@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Upload, Plus, Trash2 } from "lucide-react";
-import { CreateTokenFeeOptions } from "phantasma-sdk-ts";
+import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
 
 import { Button } from "@/components/ui/button";
 
@@ -72,6 +72,14 @@ export function TokenDeploymentForm({
   const [txStatus, setTxStatus] = useState<TxStatus>({ kind: "idle" });
 
   const walletAddress = phaCtx?.conn?.link?.account?.address;
+  const trimmedSymbol = symbol.trim();
+
+  const symbolValidation = useMemo(() => {
+    if (!trimmedSymbol) {
+      return { ok: false, error: null };
+    }
+    return TokenInfoBuilder.checkIsValidSymbol(trimmedSymbol);
+  }, [trimmedSymbol]);
 
   const resetForm = useCallback(() => {
     setSymbol("");
@@ -97,7 +105,7 @@ export function TokenDeploymentForm({
 
   const handleDeploy = useCallback(async () => {
     addLog("🚀 handleDeploy started", {
-      symbol,
+      symbol: trimmedSymbol,
       name,
       url: tokenUrl,
       description,
@@ -115,9 +123,16 @@ export function TokenDeploymentForm({
       toast.error("Connect wallet first");
       return;
     }
-    if (!symbol || symbol.trim().length === 0) {
+    if (!trimmedSymbol) {
       addLog("❌ Symbol is required");
       toast.error("Symbol is required");
+      return;
+    }
+    if (symbolValidation && !symbolValidation.ok) {
+      addLog("❌ Symbol validation failed", { error: symbolValidation.error });
+      const validationError =
+        symbolValidation.error ?? "Symbol validation error: Unknown error";
+      toast.error(validationError);
       return;
     }
     if (!name.trim()) {
@@ -178,7 +193,7 @@ export function TokenDeploymentForm({
     });
 
     setDeploying(true);
-    toast(`Deploying ${symbol}...`);
+    toast(`Deploying ${trimmedSymbol}...`);
 
     try {
       const ownerAddress = walletAddress;
@@ -215,7 +230,7 @@ export function TokenDeploymentForm({
 
       addLog("🚀🚀 Deploying carbon token", {
         ownerAddress,
-        symbol: symbol.trim(),
+        symbol: trimmedSymbol,
         name: name.trim(),
         url: tokenUrl.trim(),
         description: description.trim(),
@@ -236,7 +251,7 @@ export function TokenDeploymentForm({
       const res = await deployCarbonToken({
         conn: phaCtx.conn,
         ownerAddress,
-        symbol: symbol.trim(),
+        symbol: trimmedSymbol,
         name: name.trim(),
         isNFT,
         decimals: decimals ?? 0,
@@ -274,7 +289,7 @@ export function TokenDeploymentForm({
       addLog("🔄 Refreshing tokens list after deploy");
       await onRefreshTokens(ownerAddress);
 
-      expandToken(symbol.trim());
+      expandToken(trimmedSymbol);
       resetForm();
       addLog("✅ Deploy process completed");
     } catch (err: any) {
@@ -311,7 +326,8 @@ export function TokenDeploymentForm({
     onRefreshTokens,
     phaCtx,
     resetForm,
-    symbol,
+    trimmedSymbol,
+    symbolValidation,
     tokenUrl,
     walletAddress,
   ]);
@@ -664,7 +680,10 @@ export function TokenDeploymentForm({
         <Button
           onClick={handleDeploy}
           disabled={
-            deploying || !walletAddress || !symbol.trim()
+            deploying ||
+            !walletAddress ||
+            !trimmedSymbol ||
+            (trimmedSymbol && symbolValidation && !symbolValidation.ok)
           }
           className="flex items-center gap-2"
         >
@@ -681,9 +700,15 @@ export function TokenDeploymentForm({
         </div>
       )}
 
-      {walletAddress && !symbol.trim() && (
+      {walletAddress && !trimmedSymbol && (
         <div className="text-xs text-muted-foreground">
           ⚠️ Symbol is required to deploy a token
+        </div>
+      )}
+
+      {trimmedSymbol && symbolValidation && !symbolValidation.ok && (
+        <div className="text-xs text-amber-500">
+          ⚠️ {symbolValidation.error ?? "Symbol validation error"}
         </div>
       )}
 
