@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Upload, Plus, Trash2 } from "lucide-react";
 import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
@@ -73,6 +73,7 @@ export function TokenDeploymentForm({
 
   const walletAddress = phaCtx?.conn?.link?.account?.address;
   const trimmedSymbol = symbol.trim();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const symbolValidation = useMemo(() => {
     if (!trimmedSymbol) {
@@ -96,6 +97,9 @@ export function TokenDeploymentForm({
     setMaxDataLimit("1000000000");
     setIconDataUri(null);
     setIconFileName(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setMetadataFields([]);
     setMetadataIdCounter(0);
     setIsNFT(false);
@@ -402,46 +406,51 @@ export function TokenDeploymentForm({
               Icon <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
-                <Upload size={16} />
-                <span>Choose file</span>
-                <input
-                  type="file"
-                  accept=".png,.jpg,.jpeg,.svg"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) {
-                      setIconDataUri(null);
-                      setIconFileName(null);
-                      return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = (loadEvt) => {
-                      const result = loadEvt.target?.result;
-                      if (typeof result === "string") {
-                        setIconDataUri(result);
-                        setIconFileName(file.name);
-                        addLog("🖼️ Icon loaded", {
-                          name: file.name,
-                          size: file.size,
-                          type: file.type,
-                        });
-                      } else {
-                        toast.error("Failed to read icon file");
-                        setIconDataUri(null);
-                        setIconFileName(null);
-                      }
-                    };
-                    reader.onerror = () => {
-                      toast.error("Failed to read icon file");
-                      setIconDataUri(null);
-                      setIconFileName(null);
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
+                    <Upload size={16} />
+                    <span>Choose file</span>
+                    <input
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.svg"
+                      className="hidden"
+                      ref={fileInputRef}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        const inputEl = event.target;
+                        if (!file) {
+                          setIconDataUri(null);
+                          setIconFileName(null);
+                          inputEl.value = "";
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (loadEvt) => {
+                          const result = loadEvt.target?.result;
+                          if (typeof result === "string") {
+                            setIconDataUri(result);
+                            setIconFileName(file.name);
+                            addLog("🖼️ Icon loaded", {
+                              name: file.name,
+                              size: file.size,
+                              type: file.type,
+                            });
+                          } else {
+                            toast.error("Failed to read icon file");
+                            setIconDataUri(null);
+                            setIconFileName(null);
+                          }
+                          inputEl.value = "";
+                        };
+                        reader.onerror = () => {
+                          toast.error("Failed to read icon file");
+                          setIconDataUri(null);
+                          setIconFileName(null);
+                          inputEl.value = "";
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
               <div className="flex-1 rounded border bg-background px-3 py-2 text-sm">
                 {iconFileName ? (
                   <span className="block truncate">{iconFileName}</span>
@@ -452,14 +461,17 @@ export function TokenDeploymentForm({
                 )}
               </div>
               {iconFileName && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setIconDataUri(null);
-                    setIconFileName(null);
-                  }}
-                >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setIconDataUri(null);
+                          setIconFileName(null);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = "";
+                          }
+                        }}
+                      >
                   Remove
                 </Button>
               )}
