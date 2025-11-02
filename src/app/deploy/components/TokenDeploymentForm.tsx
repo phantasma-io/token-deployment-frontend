@@ -123,7 +123,6 @@ export function TokenDeploymentForm({
   const [maxDataLimit, setMaxDataLimit] = useState("1000000000");
   const [iconDataUri, setIconDataUri] = useState<string | null>(null);
   const [iconFileName, setIconFileName] = useState<string | null>(null);
-  const [iconInputMode, setIconInputMode] = useState<"file" | "manual">("file");
   const [manualIconInput, setManualIconInput] = useState("");
   const [manualIconError, setManualIconError] = useState<string | null>(null);
   const [metadataFields, setMetadataFields] = useState<MetadataField[]>([]);
