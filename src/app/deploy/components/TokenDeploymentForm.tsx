@@ -24,6 +24,63 @@ type TxStatus =
   | { kind: "success"; hash: string; tokenId?: number }
   | { kind: "failure"; message: string; hash?: string };
 
+const ALLOWED_ICON_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/svg+xml",
+]);
+
+type IconValidationResult =
+  | { ok: true; mimeType: string }
+  | { ok: false; error: string };
+
+function validateIconDataUri(dataUri: string): IconValidationResult {
+  const trimmed = dataUri.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Icon data URI cannot be empty" };
+  }
+
+  const match = /^data:([^;]+);base64,(.+)$/i.exec(trimmed);
+  if (!match) {
+    return {
+      ok: false,
+      error:
+        "Icon must be a valid data URI (data:[mime];base64,...)",
+    };
+  }
+
+  const mimeType = match[1];
+  const base64Payload = match[2];
+
+  if (!ALLOWED_ICON_MIME_TYPES.has(mimeType)) {
+    return {
+      ok: false,
+      error: `Unsupported icon mime type: ${mimeType}`,
+    };
+  }
+
+  if (!base64Payload || base64Payload.length === 0) {
+    return {
+      ok: false,
+      error: "Icon data URI payload is empty",
+    };
+  }
+
+  try {
+    // Ensure base64 payload decodes successfully.
+    // eslint-disable-next-line no-unused-vars
+    const _decoded = atob(base64Payload);
+  } catch {
+    return {
+      ok: false,
+      error: "Icon data URI payload is not valid base64",
+    };
+  }
+
+  return { ok: true, mimeType };
+}
+
 function parseBigIntField(raw: string, label: string, allowEmpty = false) {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
@@ -66,6 +123,9 @@ export function TokenDeploymentForm({
   const [maxDataLimit, setMaxDataLimit] = useState("1000000000");
   const [iconDataUri, setIconDataUri] = useState<string | null>(null);
   const [iconFileName, setIconFileName] = useState<string | null>(null);
+  const [iconInputMode, setIconInputMode] = useState<"file" | "manual">("file");
+  const [manualIconInput, setManualIconInput] = useState("");
+  const [manualIconError, setManualIconError] = useState<string | null>(null);
   const [metadataFields, setMetadataFields] = useState<MetadataField[]>([]);
   const [metadataIdCounter, setMetadataIdCounter] = useState(0);
   const [deploying, setDeploying] = useState(false);
@@ -97,6 +157,8 @@ export function TokenDeploymentForm({
     setMaxDataLimit("1000000000");
     setIconDataUri(null);
     setIconFileName(null);
+    setManualIconInput("");
+    setManualIconError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -406,51 +468,53 @@ export function TokenDeploymentForm({
               Icon <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
-                    <Upload size={16} />
-                    <span>Choose file</span>
-                    <input
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.svg"
-                      className="hidden"
-                      ref={fileInputRef}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        const inputEl = event.target;
-                        if (!file) {
-                          setIconDataUri(null);
-                          setIconFileName(null);
-                          inputEl.value = "";
-                          return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = (loadEvt) => {
-                          const result = loadEvt.target?.result;
-                          if (typeof result === "string") {
-                            setIconDataUri(result);
-                            setIconFileName(file.name);
-                            addLog("🖼️ Icon loaded", {
-                              name: file.name,
-                              size: file.size,
-                              type: file.type,
-                            });
-                          } else {
-                            toast.error("Failed to read icon file");
-                            setIconDataUri(null);
-                            setIconFileName(null);
-                          }
-                          inputEl.value = "";
-                        };
-                        reader.onerror = () => {
-                          toast.error("Failed to read icon file");
-                          setIconDataUri(null);
-                          setIconFileName(null);
-                          inputEl.value = "";
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                  </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
+                <Upload size={16} />
+                <span>Choose file</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.svg"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    const inputEl = event.target;
+                    if (!file) {
+                      setIconDataUri(null);
+                      setIconFileName(null);
+                      inputEl.value = "";
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (loadEvt) => {
+                      const result = loadEvt.target?.result;
+                      if (typeof result === "string") {
+                        setIconDataUri(result);
+                        setIconFileName(file.name);
+                        addLog("🖼️ Icon loaded", {
+                          name: file.name,
+                          size: file.size,
+                          type: file.type,
+                        });
+                        setManualIconInput(result);
+                        setManualIconError(null);
+                      } else {
+                        toast.error("Failed to read icon file");
+                        setIconDataUri(null);
+                        setIconFileName(null);
+                      }
+                      inputEl.value = "";
+                    };
+                    reader.onerror = () => {
+                      toast.error("Failed to read icon file");
+                      setIconDataUri(null);
+                      setIconFileName(null);
+                      inputEl.value = "";
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
               <div className="flex-1 rounded border bg-background px-3 py-2 text-sm">
                 {iconFileName ? (
                   <span className="block truncate">{iconFileName}</span>
@@ -461,26 +525,61 @@ export function TokenDeploymentForm({
                 )}
               </div>
               {iconFileName && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          setIconDataUri(null);
-                          setIconFileName(null);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.value = "";
-                          }
-                        }}
-                      >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setIconDataUri(null);
+                    setIconFileName(null);
+                    setManualIconInput("");
+                    setManualIconError(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
+                >
                   Remove
                 </Button>
               )}
             </div>
-            {iconDataUri && (
-              <p className="text-xs text-muted-foreground break-all">
-                {iconDataUri.slice(0, 48)}…
-              </p>
-            )}
+            <div className="space-y-2">
+              <textarea
+                className="w-full rounded border px-2 py-1 font-mono text-xs"
+                rows={4}
+                placeholder="data:image/png;base64,iVBORw0K…"
+                value={manualIconInput}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setManualIconInput(value);
+                  const trimmedValue = value.trim();
+                  if (!trimmedValue) {
+                    setManualIconError("Icon data URI is required");
+                    setIconDataUri(null);
+                    setIconFileName(null);
+                    return;
+                  }
+                  const validation = validateIconDataUri(trimmedValue);
+                  if (!validation.ok) {
+                    setManualIconError(validation.error);
+                    setIconDataUri(null);
+                    setIconFileName(null);
+                    return;
+                  }
+                  setManualIconError(null);
+                  setIconDataUri(trimmedValue);
+                  setIconFileName(
+                    `manual (${validation.mimeType.replace("image/", "")})`,
+                  );
+                }}
+              />
+              {manualIconError ? (
+                <p className="text-xs text-amber-500">{manualIconError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Paste a valid data URI (PNG, JPEG, or SVG). The payload must be base64 encoded.
+                </p>
+              )}
+            </div>
           </div>
 
           <div>
@@ -588,9 +687,8 @@ export function TokenDeploymentForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label
-            className={`block text-sm font-medium mb-1 ${
-              isNFT ? "text-muted-foreground" : ""
-            }`}
+            className={`block text-sm font-medium mb-1 ${isNFT ? "text-muted-foreground" : ""
+              }`}
           >
             Decimals
           </label>
