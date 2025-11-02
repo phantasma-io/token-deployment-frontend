@@ -8,7 +8,7 @@ import type { AddLogFn } from "../types";
 
 type ExpandedTokenState = Record<string, boolean>;
 
-export function useTokenInventory(addLog: AddLogFn) {
+export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [expandedTokens, setExpandedTokens] = useState<ExpandedTokenState>({});
@@ -46,8 +46,16 @@ export function useTokenInventory(addLog: AddLogFn) {
           full_response: list,
         });
 
-        setTokens(list ?? []);
-        resetPagination();
+        const nextTokens = list ?? [];
+        setTokens(nextTokens);
+        setExpandedTokens({});
+        setCurrentPage((prev) => {
+          const totalPages = Math.max(
+            1,
+            Math.ceil(nextTokens.length / pageSize),
+          );
+          return Math.min(prev, totalPages);
+        });
         addLog("✅ Tokens state updated", { tokens_count: (list ?? []).length });
       } catch (err: any) {
         addLog("❌ loadTokens failed", {
@@ -62,6 +70,8 @@ export function useTokenInventory(addLog: AddLogFn) {
         console.error("Failed to load tokens", err);
         toast.error("Failed to load tokens");
         setTokens([]);
+        setExpandedTokens({});
+        setCurrentPage(1);
         throw err;
       } finally {
         setLoadingTokens(false);

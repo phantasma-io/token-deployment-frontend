@@ -43,7 +43,7 @@ const DeployPage = observer(() => {
     toggleExpanded,
     expandToken,
     clearTokens,
-  } = useTokenInventory(addLog);
+  } = useTokenInventory(addLog, PAGE_SIZE);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
   const isTokenSelectable = useCallback(
