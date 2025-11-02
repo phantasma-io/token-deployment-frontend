@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronDown } from "lucide-react";
 
 interface DebugLoggerProps {
   heading?: string;
@@ -12,6 +13,7 @@ interface DebugLoggerProps {
 
 export function DebugLogger({ heading = "Detailed Debug Logs", logs, clearLogs }: DebugLoggerProps) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const copyToClipboard = async () => {
     try {
@@ -27,12 +29,23 @@ export function DebugLogger({ heading = "Detailed Debug Logs", logs, clearLogs }
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            🐛 {heading}
-            <span className="text-sm font-normal text-muted-foreground">
-              ({logs.length} entries)
+          <button
+            type="button"
+            className="flex items-center gap-2 text-left focus:outline-none"
+            onClick={() => setExpanded((prev) => !prev)}
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+            />
+            <span className="flex items-center gap-2">
+              🐛 {heading}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({logs.length} entries)
+              </span>
             </span>
-          </span>
+          </button>
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -53,14 +66,16 @@ export function DebugLogger({ heading = "Detailed Debug Logs", logs, clearLogs }
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <textarea
-          className="w-full h-64 p-3 font-mono text-xs bg-muted border rounded-md resize-none overflow-y-auto"
-          value={logs.join('\n')}
-          readOnly
-          placeholder="Debug information will appear here..."
-        />
-      </CardContent>
+      {expanded && (
+        <CardContent>
+          <textarea
+            className="w-full h-64 p-3 font-mono text-xs bg-muted border rounded-md resize-none overflow-y-auto"
+            value={logs.join('\n')}
+            readOnly
+            placeholder="Debug information will appear here..."
+          />
+        </CardContent>
+      )}
     </Card>
   );
 }
