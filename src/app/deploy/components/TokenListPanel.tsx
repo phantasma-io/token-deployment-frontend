@@ -1,5 +1,5 @@
 import type { Token } from "phantasma-sdk-ts";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw, Coins, Lock, Inbox, Loader2 } from "lucide-react";
 
 import {
   Card,
@@ -57,7 +57,8 @@ export function TokenListPanel({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2">
-          🪙 Your Tokens
+          <Coins size={18} />
+          Your Tokens
           {hasWalletAddress && (
             <span className="text-sm font-normal text-muted-foreground">
               ({tokens.length})
@@ -103,26 +104,26 @@ export function TokenListPanel({
           </div>
         )}
 
-        {!hasWalletAddress ? (
-          <div className="text-center py-8">
-            <div className="text-2xl mb-2">🔒</div>
-            <div className="text-sm text-muted-foreground">
-              Connect your wallet to view and deploy tokens
-            </div>
-          </div>
-        ) : loading ? (
-          <div className="text-center py-4">
-            <div className="text-lg mb-2">⏳</div>
-            <div>Loading tokens...</div>
-          </div>
-        ) : tokens.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="text-2xl mb-2">📭</div>
-            <div className="text-sm text-muted-foreground">
-              No tokens found for this address
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Deploy your first token using the form →
+            {!hasWalletAddress ? (
+              <div className="text-center py-8 space-y-2">
+                <Lock className="mx-auto h-8 w-8 text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">
+                  Connect your wallet to view and deploy tokens
+                </div>
+              </div>
+            ) : loading ? (
+              <div className="text-center py-4 space-y-2">
+                <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="text-sm">Loading tokens...</div>
+              </div>
+            ) : tokens.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <Inbox className="mx-auto h-8 w-8 text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">
+                  No tokens found for this address
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Deploy your first token using the form →
             </div>
           </div>
         ) : (

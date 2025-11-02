@@ -57,7 +57,7 @@ const DeployPage = observer(() => {
   );
 
   useEffect(() => {
-    addLog("🔄 useEffect triggered - checking wallet connection", {
+    addLog("[effect] useEffect triggered - checking wallet connection", {
       is_connected: phaCtx?.is_connected,
       conn_exists: !!phaCtx?.conn,
       link_exists: !!phaCtx?.conn?.link,
@@ -84,14 +84,14 @@ const DeployPage = observer(() => {
     });
 
     if (!walletAddress) {
-      addLog("❌ No wallet address found, clearing tokens");
+      addLog("[error] No wallet address found, clearing tokens");
       clearTokens();
       setSelectedToken(null);
       setSelectedTokenKey(null);
       return;
     }
 
-    addLog("✅ Wallet address found, loading tokens", { address: walletAddress });
+    addLog("[success] Wallet address found, loading tokens", { address: walletAddress });
     void loadTokens(walletAddress).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phaCtx?.is_connected, walletAddress]);
@@ -107,14 +107,14 @@ const DeployPage = observer(() => {
 
   const handleRefreshTokens = useCallback(() => {
     if (!walletAddress) return;
-    addLog("🔄 Refresh button clicked", { address: walletAddress });
+    addLog("[action] Refresh button clicked", { address: walletAddress });
     void loadTokens(walletAddress).catch(() => undefined);
   }, [walletAddress, addLog, loadTokens]);
 
   const handleSelectToken = useCallback(
     (token: Token, key: string) => {
       if ((activeTab === "series" || activeTab === "infuse") && !isTokenNFT(token)) {
-        addLog("🚫 Ignoring selection of fungible token in NFT-only tab", {
+        addLog("[warn] Ignoring selection of fungible token in NFT-only tab", {
           key,
           symbol: token?.symbol,
           tab: activeTab,
@@ -123,7 +123,7 @@ const DeployPage = observer(() => {
       }
       setSelectedToken(token);
       setSelectedTokenKey(key);
-      addLog("🎯 Token selected for actions", {
+      addLog("[select] Token selected for actions", {
         key,
         symbol: token?.symbol,
         name: token?.name,
@@ -178,7 +178,7 @@ const DeployPage = observer(() => {
   useEffect(() => {
     if (activeTab === "deploy") {
       if (selectedTokenKey !== null || selectedToken !== null) {
-        addLog("🧹 Clearing token selection for deploy tab");
+      addLog("[cleanup] Clearing token selection for deploy tab");
       }
       if (selectedTokenKey !== null) {
         setSelectedTokenKey(null);
@@ -194,7 +194,7 @@ const DeployPage = observer(() => {
       selectedToken &&
       !isTokenNFT(selectedToken)
     ) {
-      addLog("⚠️ NFT-only tab, clearing fungible selection", {
+      addLog("[warn] NFT-only tab, clearing fungible selection", {
         symbol: selectedToken.symbol,
         tab: activeTab,
       });
@@ -206,7 +206,7 @@ const DeployPage = observer(() => {
   const handleTabChange = useCallback(
     (tab: TokenActionTab) => {
       setActiveTab(tab);
-      addLog("🧭 Action tab changed", { tab });
+      addLog("[nav] Action tab changed", { tab });
     },
     [addLog],
   );

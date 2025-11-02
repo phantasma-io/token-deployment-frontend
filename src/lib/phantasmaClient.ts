@@ -52,10 +52,10 @@ function createApi() {
  * Fetch tokens for an owner address via server API.
  */
 export async function getTokens(ownerAddress: string): Promise<TokenInfo[]> {
-  console.log("🔄 getTokens called", { ownerAddress, RPC_URL, NEXUS });
+  console.log("[fetch] getTokens called", { ownerAddress, RPC_URL, NEXUS });
 
   if (!ownerAddress) {
-    console.log("❌ getTokens: No owner address provided");
+    console.log("[error] getTokens: No owner address provided");
     return [];
   }
 
@@ -63,14 +63,14 @@ export async function getTokens(ownerAddress: string): Promise<TokenInfo[]> {
 
   try {
     const result = await api.getTokens(ownerAddress, true);
-    console.log("📥 getTokens: RPC response received", {
+    console.log("[rpc] getTokens: RPC response received", {
       type: typeof result,
       isArray: Array.isArray(result),
       length: result?.length,
     });
     return result;
   } catch (error) {
-    console.error("❌ getTokens: RPC call failed", { error });
+    console.error("[error] getTokens: RPC call failed", { error });
     throw error;
   }
 }
@@ -183,7 +183,7 @@ export async function deployCarbonToken(
     };
   }
 
-  console.log("📥 walletResult received", walletResult);
+  console.log("[wallet] walletResult received", walletResult);
 
   const txHash = walletResult.hash;
   let tokenId: number | undefined = undefined;
@@ -309,7 +309,7 @@ async function waitForTransactionConfirmation(
         }
       }
     } catch (err) {
-      console.warn(`⚠️ getTransaction(${txHash}) failed`, err);
+      console.warn(`[warn] getTransaction(${txHash}) failed`, err);
     }
 
     attempts++;

@@ -26,11 +26,11 @@ export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
 
   const loadTokens = useCallback(
     async (ownerAddress: string) => {
-      addLog("🔄 loadTokens started", { ownerAddress });
+      addLog("[fetch] loadTokens started", { ownerAddress });
       setLoadingTokens(true);
 
       try {
-        addLog("📞 Calling getTokens API", {
+        addLog("[rpc] Calling getTokens API", {
           ownerAddress,
           api_url: process.env.NEXT_PUBLIC_API_URL,
           nexus: process.env.NEXT_PUBLIC_PHANTASMA_NEXUS,
@@ -38,7 +38,7 @@ export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
 
         const list = await getTokens(ownerAddress);
 
-        addLog("📥 getTokens response received", {
+        addLog("[rpc] getTokens response received", {
           response_type: typeof list,
           is_array: Array.isArray(list),
           length: list?.length,
@@ -56,9 +56,9 @@ export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
           );
           return Math.min(prev, totalPages);
         });
-        addLog("✅ Tokens state updated", { tokens_count: (list ?? []).length });
+        addLog("[success] Tokens state updated", { tokens_count: (list ?? []).length });
       } catch (err: any) {
-        addLog("❌ loadTokens failed", {
+        addLog("[error] loadTokens failed", {
           error_message: err?.message,
           error_name: err?.name,
           error_stack: err?.stack,
@@ -75,7 +75,7 @@ export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
         throw err;
       } finally {
         setLoadingTokens(false);
-        addLog("🏁 loadTokens finished");
+        addLog("[done] loadTokens finished");
       }
     },
     [addLog, resetPagination],

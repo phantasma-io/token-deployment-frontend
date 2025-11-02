@@ -1,6 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload, Plus, Trash2 } from "lucide-react";
+import {
+  Upload,
+  Plus,
+  Trash2,
+  Rocket,
+  Loader2,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
 
 import { Button } from "@/components/ui/button";
@@ -169,7 +178,7 @@ export function TokenDeploymentForm({
   const metadataFieldsMap = useMemo(() => metadataFields, [metadataFields]);
 
   const handleDeploy = useCallback(async () => {
-    addLog("🚀 handleDeploy started", {
+    addLog("[deploy] handleDeploy started", {
       symbol: trimmedSymbol,
       name,
       url: tokenUrl,
@@ -184,39 +193,39 @@ export function TokenDeploymentForm({
     });
 
     if (!phaCtx?.conn) {
-      addLog("❌ No wallet connection");
+      addLog("[error] No wallet connection");
       toast.error("Connect wallet first");
       return;
     }
     if (!trimmedSymbol) {
-      addLog("❌ Symbol is required");
+      addLog("[error] Symbol is required");
       toast.error("Symbol is required");
       return;
     }
     if (symbolValidation && !symbolValidation.ok) {
-      addLog("❌ Symbol validation failed", { error: symbolValidation.error });
+      addLog("[error] Symbol validation failed", { error: symbolValidation.error });
       const validationError =
         symbolValidation.error ?? "Symbol validation error: Unknown error";
       toast.error(validationError);
       return;
     }
     if (!name.trim()) {
-      addLog("❌ Name is required");
+      addLog("[error] Name is required");
       toast.error("Name is required");
       return;
     }
     if (!iconDataUri) {
-      addLog("❌ Icon is required");
+      addLog("[error] Icon is required");
       toast.error("Icon is required");
       return;
     }
     if (!tokenUrl.trim()) {
-      addLog("❌ URL is required");
+      addLog("[error] URL is required");
       toast.error("URL is required");
       return;
     }
     if (!description.trim()) {
-      addLog("❌ Description is required");
+      addLog("[error] Description is required");
       toast.error("Description is required");
       return;
     }
@@ -243,12 +252,12 @@ export function TokenDeploymentForm({
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      addLog("❌ Fee/max parse failed", { error: message });
+      addLog("[error] Fee/max parse failed", { error: message });
       toast.error(message);
       return;
     }
 
-    addLog("⚙️ Fee configuration parsed", {
+    addLog("[info] Fee configuration parsed", {
       gasFeeBase: feeConfig.gasFeeBase.toString(),
       gasFeeCreateTokenBase: feeConfig.gasFeeCreateTokenBase.toString(),
       gasFeeCreateTokenSymbol: feeConfig.gasFeeCreateTokenSymbol.toString(),
@@ -291,9 +300,9 @@ export function TokenDeploymentForm({
       const metadata =
         Object.keys(metadataObj).length > 0 ? metadataObj : undefined;
 
-      addLog("🧾 Compiled metadata", { metadata });
+      addLog("[info] Compiled metadata", { metadata });
 
-      addLog("🚀🚀 Deploying carbon token", {
+      addLog("[deploy] Deploying carbon token", {
         ownerAddress,
         symbol: trimmedSymbol,
         name: name.trim(),
@@ -326,10 +335,10 @@ export function TokenDeploymentForm({
         maxData: maxDataBig,
       });
 
-      addLog("📥 deployCarbonToken response", { response: res });
+      addLog("[info] deployCarbonToken response", { response: res });
 
       if (!res.success) {
-        addLog("❌ Deploy failed", { error: res.error });
+        addLog("[error] Deploy failed", { error: res.error });
         console.error("Deploy error:", res.error);
         toast.error("Deploy failed: " + (res.error ?? "unknown"));
         setTxStatus({
@@ -340,7 +349,7 @@ export function TokenDeploymentForm({
         return;
       }
 
-      addLog("✅ Deploy successful", {
+      addLog("[success] Deploy successful", {
         txHash: res.txHash,
         tokenId: res.tokenId,
       });
@@ -351,15 +360,15 @@ export function TokenDeploymentForm({
         tokenId: res.tokenId,
       });
 
-      addLog("🔄 Refreshing tokens list after deploy");
+      addLog("[action] Refreshing tokens list after deploy");
       await onRefreshTokens(ownerAddress);
 
       expandToken(trimmedSymbol);
       resetForm();
-      addLog("✅ Deploy process completed");
+      addLog("[success] Deploy process completed");
     } catch (err: any) {
       const message = err?.message ?? String(err);
-      addLog("❌ Deploy exception", {
+      addLog("[error] Deploy exception", {
         error_message: message,
         error_name: err?.name,
         error_stack: err?.stack,
@@ -370,7 +379,7 @@ export function TokenDeploymentForm({
       setTxStatus({ kind: "failure", message });
     } finally {
       setDeploying(false);
-      addLog("🏁 handleDeploy finished");
+      addLog("[done] handleDeploy finished");
     }
   }, [
     addLog,
@@ -490,7 +499,7 @@ export function TokenDeploymentForm({
                       if (typeof result === "string") {
                         setIconDataUri(result);
                         setIconFileName(file.name);
-                        addLog("🖼️ Icon loaded", {
+                          addLog("[icon] Icon loaded", {
                           name: file.name,
                           size: file.size,
                           type: file.type,
@@ -796,7 +805,17 @@ export function TokenDeploymentForm({
           }
           className="flex items-center gap-2"
         >
-          {deploying ? <>⏳ Deploying...</> : <>🚀 Deploy Token</>}
+          {deploying ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Deploying...
+            </>
+          ) : (
+            <>
+              <Rocket className="h-4 w-4" />
+              Deploy Token
+            </>
+          )}
         </Button>
         <Button variant="ghost" onClick={resetForm}>
           Reset
@@ -804,20 +823,23 @@ export function TokenDeploymentForm({
       </div>
 
       {!walletAddress && (
-        <div className="text-xs text-muted-foreground">
-          ⚠️ Connect your wallet to deploy tokens
+        <div className="flex items-center gap-2 text-xs text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          Connect your wallet to deploy tokens
         </div>
       )}
 
       {walletAddress && !trimmedSymbol && (
-        <div className="text-xs text-muted-foreground">
-          ⚠️ Symbol is required to deploy a token
+        <div className="flex items-center gap-2 text-xs text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          Symbol is required to deploy a token
         </div>
       )}
 
       {trimmedSymbol && symbolValidation && !symbolValidation.ok && (
-        <div className="text-xs text-amber-500">
-          ⚠️ {symbolValidation.error ?? "Symbol validation error"}
+        <div className="flex items-center gap-2 text-xs text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          {symbolValidation.error ?? "Symbol validation error"}
         </div>
       )}
 
@@ -825,14 +847,16 @@ export function TokenDeploymentForm({
         <div className="font-medium text-foreground">Deployment status</div>
         {txStatus.kind === "idle" && <div>No recent deployment.</div>}
         {txStatus.kind === "pending" && (
-          <div className="text-amber-500">
-            ⏳ Waiting for transaction confirmation for {txStatus.symbol}…
+          <div className="flex items-center gap-2 text-amber-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Waiting for transaction confirmation for {txStatus.symbol}…
           </div>
         )}
         {txStatus.kind === "success" && (
           <div className="space-y-1">
-            <div className="text-emerald-600 flex items-center gap-1">
-              ✅ Transaction confirmed
+            <div className="text-emerald-600 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              Transaction confirmed
               {typeof txStatus.tokenId === "number" && (
                 <span className="text-xs text-muted-foreground">
                   (Token ID: {txStatus.tokenId})
@@ -863,7 +887,10 @@ export function TokenDeploymentForm({
         )}
         {txStatus.kind === "failure" && (
           <div className="space-y-1 text-destructive">
-            <div>❌ Transaction failed: {txStatus.message}</div>
+            <div className="flex items-center gap-2">
+              <XCircle className="h-4 w-4" />
+              Transaction failed: {txStatus.message}
+            </div>
             {txStatus.hash && (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span className="font-mono text-xs break-all">

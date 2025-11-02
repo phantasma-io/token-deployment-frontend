@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/card";
 
 import type { AddLogFn, TokenActionTab } from "../types";
+import { Rocket } from "lucide-react";
+
 import { TokenDeploymentForm } from "./TokenDeploymentForm";
 import { TokenSeriesTab } from "./TokenSeriesTab";
 import { TokenMintTab } from "./TokenMintTab";
@@ -61,7 +63,8 @@ export function TokenActionsTabs({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              🚀 Deploy New Token
+              <Rocket size={18} />
+              Deploy New Token
             </CardTitle>
             <p className="text-sm text-muted-foreground">
               Create a new Carbon token on Phantasma blockchain
