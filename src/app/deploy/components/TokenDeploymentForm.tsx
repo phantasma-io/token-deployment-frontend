@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
+  Info,
 } from "lucide-react";
 import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
 
@@ -109,6 +110,46 @@ function parseBigIntField(raw: string, label: string, allowEmpty = false) {
   }
 }
 
+function parseSupplyWithDecimals(raw: string, decimals: number, label: string) {
+  const trimmed = raw.trim();
+  if (!Number.isInteger(decimals) || decimals < 0) {
+    throw new Error(`${label}: Decimals must be a non-negative integer`);
+  }
+
+  if (trimmed.length === 0) {
+    return 0n;
+  }
+
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    throw new Error(`${label}: Only numeric values are allowed`);
+  }
+
+  const [wholePartRaw, fractionRaw = ""] = trimmed.split(".");
+  const wholePart = wholePartRaw || "0";
+  const fractionPart = fractionRaw || "";
+
+  if (!/^\d+$/.test(wholePart)) {
+    throw new Error(`${label}: Invalid whole part`);
+  }
+
+  if (decimals === 0) {
+    if (fractionPart.length > 0) {
+      throw new Error(`${label}: Fractional value is not allowed when decimals are 0`);
+    }
+    return BigInt(wholePart);
+  }
+
+  if (fractionPart.length > decimals) {
+    throw new Error(
+      `${label}: Fractional precision exceeds decimals (${decimals})`,
+    );
+  }
+
+  const paddedFraction = fractionPart.padEnd(decimals, "0");
+  const combined = `${wholePart}${paddedFraction}`.replace(/^0+/, "") || "0";
+  return BigInt(combined);
+}
+
 export function TokenDeploymentForm({
   phaCtx,
   addLog,
@@ -150,6 +191,15 @@ export function TokenDeploymentForm({
     return TokenInfoBuilder.checkIsValidSymbol(trimmedSymbol);
   }, [trimmedSymbol]);
 
+  const supplyCalculation = useMemo(() => {
+    try {
+      const baseUnits = parseSupplyWithDecimals(maxSupply, decimals ?? 0, "Max supply");
+      return { ok: true as const, baseUnits };
+    } catch (err: any) {
+      return { ok: false as const, error: err?.message ?? String(err) };
+    }
+  }, [maxSupply, decimals]);
+
   const resetForm = useCallback(() => {
     setSymbol("");
     setName("");
@@ -186,6 +236,9 @@ export function TokenDeploymentForm({
       isNFT,
       decimals,
       maxSupply,
+      maxSupply_base_units: supplyCalculation.ok
+        ? supplyCalculation.baseUnits.toString()
+        : "invalid",
       has_icon: !!iconDataUri,
       metadata_fields: metadataFieldsMap,
       wallet_connected: !!phaCtx?.conn,
@@ -207,6 +260,11 @@ export function TokenDeploymentForm({
       const validationError =
         symbolValidation.error ?? "Symbol validation error: Unknown error";
       toast.error(validationError);
+      return;
+    }
+    if (!supplyCalculation.ok) {
+      addLog("[error] Max supply validation failed", { error: supplyCalculation.error });
+      toast.error(supplyCalculation.error ?? "Invalid max supply");
       return;
     }
     if (!name.trim()) {
@@ -235,7 +293,7 @@ export function TokenDeploymentForm({
     const feeConfig = new CreateTokenFeeOptions();
 
     try {
-      maxSupplyBig = parseBigIntField(maxSupply, "Max supply", true);
+      maxSupplyBig = supplyCalculation.baseUnits;
       maxDataBig = parseBigIntField(maxDataLimit, "Max data", true);
       feeConfig.gasFeeBase = parseBigIntField(gasFeeBase, "Gas fee base");
       feeConfig.gasFeeCreateTokenBase = parseBigIntField(
@@ -394,6 +452,7 @@ export function TokenDeploymentForm({
     isNFT,
     maxDataLimit,
     maxSupply,
+    supplyCalculation,
     metadataFields,
     metadataFieldsMap,
     name,
@@ -715,13 +774,51 @@ export function TokenDeploymentForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Max supply</label>
+          <label className="block text-sm font-medium mb-1">
+            <span className="flex items-center gap-1">
+              Max supply
+              <span
+                className="inline-flex"
+                title="Provide supply in human-readable units; it will be scaled by 10^decimals before submitting on-chain."
+              >
+                <Info
+                  size={14}
+                  className="text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </span>
+            </span>
+          </label>
           <input
             className="w-full rounded border px-2 py-1"
+            inputMode="decimal"
             value={maxSupply}
             onChange={(e) => setMaxSupply(e.target.value)}
             placeholder="0 for unlimited"
           />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Example: Decimals = 1 & Max supply = 0.2 → Base units = 2.
+          </p>
+        </div>
+        <div className="col-span-2">
+          {supplyCalculation.ok ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Base units:</span>
+              <span className="font-mono">
+                {supplyCalculation.baseUnits.toString()}
+              </span>
+            </div>
+          ) : maxSupply.trim().length > 0 ? (
+            <div className="flex items-center gap-2 text-xs text-amber-500">
+              <AlertTriangle className="h-3 w-3" />
+              {supplyCalculation.error}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Base units:</span>
+              <span className="font-mono">0</span>
+            </div>
+          )}
         </div>
       </div>
 
