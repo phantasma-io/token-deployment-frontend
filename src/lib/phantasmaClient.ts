@@ -19,6 +19,8 @@ import {
   CreateTokenFeeOptions,
   EasyConnect,
   TransactionData,
+  TokenSchemasBuilder,
+  TokenSchemas,
 } from "phantasma-sdk-ts";
 
 export type TokenInfo = any;
@@ -32,9 +34,11 @@ export type DeployParams = {
   decimals: number;
   maxSupply: bigint;
   metadata?: Record<string, string>;
+  tokenSchemasJson?: string; // required for NFTs
   feeOptions?: CreateTokenFeeOptions;
   maxData: bigint;
   expiry?: bigint | number | null;
+  addLog?: (message: string, data?: any) => void;
 };
 
 export type DeployResult =
@@ -93,9 +97,11 @@ export async function deployCarbonToken(
     decimals = 8,
     maxSupply,
     metadata,
+    tokenSchemasJson,
     feeOptions,
     maxData,
     expiry,
+    addLog,
   } = params;
 
   if (!conn) {
@@ -112,15 +118,33 @@ export async function deployCarbonToken(
   const ownerBytes32 = new Bytes32(publicKeyBytes);
 
   let tokenInfoInstance: DeploymentTokenInfo;
+  let tokenSchemas: TokenSchemas | undefined;
+  if (isNFT) {
+    if (!tokenSchemasJson || !tokenSchemasJson.trim()) {
+      return { success: false, error: "Token schemas JSON is required for NFTs" };
+    }
+    try {
+      addLog?.("[schemas] Using TokenSchemas JSON (raw)", { tokenSchemasJson });
+
+      const parsed = JSON.parse(tokenSchemasJson);
+      addLog?.("[schemas] Using TokenSchemas", { tokenSchemas: parsed });
+
+      tokenSchemas = TokenSchemasBuilder.fromJson(tokenSchemasJson);
+    } catch (err: any) {
+      return { success: false, error: `Invalid token schemas: ${err?.message || String(err)}` };
+    }
+  }
+
   try {
-    tokenInfoInstance = TokenInfoBuilder.build(
-      symbol.trim(),
-      IntX.fromBigInt(maxSupply),
-      isNFT,
-      decimals,
-      ownerBytes32,
-      TokenMetadataBuilder.buildAndSerialize(metadata ?? {})
-    );
+      tokenInfoInstance = TokenInfoBuilder.build(
+        symbol.trim(),
+        IntX.fromBigInt(maxSupply),
+        isNFT,
+        decimals,
+        ownerBytes32,
+      TokenMetadataBuilder.buildAndSerialize(metadata),
+      tokenSchemas,
+      );
   } catch {
     return {
       success: false,
@@ -128,8 +152,8 @@ export async function deployCarbonToken(
     };
   }
 
-  const expiryValue =
-    expiry !== undefined && expiry !== null ? BigInt(expiry) : undefined;
+  const expiryValue: bigint | undefined =
+    expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
 
   let txMsg;
   try {
@@ -188,7 +212,10 @@ export async function deployCarbonToken(
   const txHash = walletResult.hash;
   let tokenId: number | undefined = undefined;
 
-  if (txHash) {
+    if (txHash) {
+    
+    const isSuccessOutcome = (o: TransactionWaitOutcome): o is { status: "success"; tx: TransactionData } => o.status === "success";
+    const isFailureOutcome = (o: TransactionWaitOutcome): o is { status: "failure"; tx: TransactionData; message?: string } => o.status === "failure";
     const api = createApi();
     const confirmation = await waitForTransactionConfirmation(api, txHash, {
       maxAttempts: 30,
@@ -197,7 +224,7 @@ export async function deployCarbonToken(
     });
 
     if (confirmation.status === "success") {
-      const txInfo = confirmation.tx;
+      const txInfo = (confirmation as { status: "success"; tx: TransactionData }).tx;
       if (typeof txInfo?.result === "string") {
         try {
           tokenId = CreateTokenTxHelper.parseResult(txInfo?.result);
@@ -206,8 +233,9 @@ export async function deployCarbonToken(
         }
       }
     } else if (confirmation.status === "failure") {
-      const message = confirmation.message
-        ? `${confirmation.message}`
+      const failure = confirmation as { status: "failure"; tx: TransactionData; message?: string };
+      const message = failure.message
+        ? `${failure.message}`
         : "Transaction execution failed";
       return {
         success: false,
@@ -235,7 +263,7 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function extractPublicKeyBytes(conn: any): Uint8Array {
+function extractPublicKeyBytes(conn: EasyConnect): Uint8Array {
   const addressText = conn?.link?.account?.address;
   if (!addressText || typeof addressText !== "string") {
     throw new Error(

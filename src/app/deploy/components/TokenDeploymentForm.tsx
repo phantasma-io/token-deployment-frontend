@@ -16,6 +16,9 @@ import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
 import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
+import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
+import { getTokenSchemasJson as getSchemasFromStore, setTokenSchemasJson as setSchemasInStore } from "@/lib/tokenSchemasStore";
+import { TokenSchemasBuilder as SDKTokenSchemasBuilder } from "phantasma-sdk-ts";
 
 import type { AddLogFn } from "../types";
 
@@ -150,6 +153,8 @@ function parseSupplyWithDecimals(raw: string, decimals: number, label: string) {
   return BigInt(combined);
 }
 
+
+
 export function TokenDeploymentForm({
   phaCtx,
   addLog,
@@ -179,6 +184,10 @@ export function TokenDeploymentForm({
   const [metadataIdCounter, setMetadataIdCounter] = useState(0);
   const [deploying, setDeploying] = useState(false);
   const [txStatus, setTxStatus] = useState<TxStatus>({ kind: "idle" });
+  const [tokenSchemasHasError, setTokenSchemasHasError] = useState<boolean>(false);
+  const [schemasExpanded, setSchemasExpanded] = useState<boolean>(false);
+  const [isSchemasDefault, setIsSchemasDefault] = useState<boolean>(true);
+  const [tokenSchemasJson, setTokenSchemasJson] = useState<string>(() => getSchemasFromStore() ?? "");
 
   const walletAddress = phaCtx?.conn?.link?.account?.address;
   const trimmedSymbol = symbol.trim();
@@ -223,6 +232,11 @@ export function TokenDeploymentForm({
     setMetadataFields([]);
     setMetadataIdCounter(0);
     setIsNFT(false);
+    // Reset token schemas state and storage to true defaults
+    setTokenSchemasJson("");
+    try { setSchemasInStore(null); } catch {}
+    setIsSchemasDefault(true);
+    setTokenSchemasHasError(false);
   }, []);
 
   const metadataFieldsMap = useMemo(() => metadataFields, [metadataFields]);
@@ -241,6 +255,7 @@ export function TokenDeploymentForm({
         : "invalid",
       has_icon: !!iconDataUri,
       metadata_fields: metadataFieldsMap,
+      tokenSchemasJsonPresent: isNFT ? tokenSchemasJson.trim().length > 0 : false,
       wallet_connected: !!phaCtx?.conn,
       owner_address: walletAddress,
     });
@@ -286,6 +301,28 @@ export function TokenDeploymentForm({
       addLog("[error] Description is required");
       toast.error("Description is required");
       return;
+    }
+    if (isNFT) {
+      if (tokenSchemasHasError) {
+        addLog("[error] Token schemas have validation issues");
+        toast.error("Fix token schemas (duplicate or reserved names)");
+        return;
+      }
+      const js = tokenSchemasJson.trim();
+      if (!js) {
+        addLog("[error] Token schemas JSON is required for NFTs");
+        toast.error("Token schemas are required for NFTs");
+        return;
+      }
+      try {
+        // Let SDK parse/validate JSON
+        SDKTokenSchemasBuilder.fromJson(js);
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        addLog("[error] Token schemas JSON invalid", { error: msg });
+        toast.error(`Invalid token schemas: ${msg}`);
+        return;
+      }
     }
 
     let maxSupplyBig: bigint;
@@ -378,6 +415,7 @@ export function TokenDeploymentForm({
           feeMultiplier: feeConfig.feeMultiplier.toString(),
         },
         maxData: maxDataBig.toString(),
+        tokenSchemasJson: isNFT ? tokenSchemasJson : undefined,
       });
 
       const res = await deployCarbonToken({
@@ -389,8 +427,10 @@ export function TokenDeploymentForm({
         decimals: decimals ?? 0,
         maxSupply: maxSupplyBig,
         metadata,
+        tokenSchemasJson: isNFT ? tokenSchemasJson : undefined,
         feeOptions: feeConfig,
         maxData: maxDataBig,
+        addLog: (message, data) => addLog(message, data),
       });
 
       addLog("[info] deployCarbonToken response", { response: res });
@@ -444,6 +484,7 @@ export function TokenDeploymentForm({
     decimals,
     description,
     expandToken,
+    tokenSchemasHasError,
     gasFeeBase,
     gasFeeCreateTokenBase,
     gasFeeCreateTokenSymbol,
@@ -822,6 +863,45 @@ export function TokenDeploymentForm({
         </div>
       </div>
 
+      {isNFT && (
+        <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              className="flex items-center gap-2 text-left focus:outline-none"
+              onClick={() => setSchemasExpanded((p) => !p)}
+              aria-expanded={schemasExpanded}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className={`h-4 w-4 transition-transform ${schemasExpanded ? "rotate-180" : ""}`}
+              >
+                <path fillRule="evenodd" d="M12 15.75a.75.75 0 0 1-.53-.22l-5-5a.75.75 0 1 1 1.06-1.06L12 13.94l4.47-4.47a.75.75 0 0 1 1.06 1.06l-5 5a.75.75 0 0 1-.53.22z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Token Schemas
+              </h3>
+              {isSchemasDefault && (
+                <span className="text-xs text-emerald-600 ml-2">Using default schemas</span>
+              )}
+            </button>
+          </div>
+          {schemasExpanded ? (
+            <TokenSchemasBuilderUI
+              initialPlacement="rom"
+              valueJson={tokenSchemasJson}
+              onChange={(json) => setTokenSchemasJson(json)}
+              onStatusChange={(st) => {
+                setTokenSchemasHasError(!!st?.hasError);
+                setIsSchemasDefault(!!st?.isDefault);
+              }}
+            />
+          ) : null}
+        </div>
+      )}
+
       <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
         <div className="flex items-center justify-between">
           <div>
@@ -898,7 +978,8 @@ export function TokenDeploymentForm({
             deploying ||
             !walletAddress ||
             !trimmedSymbol ||
-            (trimmedSymbol && symbolValidation && !symbolValidation.ok)
+            (symbolValidation && !symbolValidation.ok) ||
+            (isNFT && tokenSchemasHasError)
           }
           className="flex items-center gap-2"
         >
@@ -937,6 +1018,13 @@ export function TokenDeploymentForm({
         <div className="flex items-center gap-2 text-xs text-amber-500">
           <AlertTriangle className="h-3 w-3" />
           {symbolValidation.error ?? "Symbol validation error"}
+        </div>
+      )}
+
+      {isNFT && tokenSchemasHasError && (
+        <div className="flex items-center gap-2 text-xs text-amber-500">
+          <AlertTriangle className="h-3 w-3" />
+          Fix token schemas builder errors before deploying
         </div>
       )}
 
