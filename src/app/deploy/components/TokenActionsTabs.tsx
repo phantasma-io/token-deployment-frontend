@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { Token } from "phantasma-sdk-ts";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import {
 import type { AddLogFn, TokenActionTab } from "../types";
 import { Rocket } from "lucide-react";
 
-import { TokenDeploymentForm } from "./TokenDeploymentForm";
+import { TokenDeploymentForm, type TokenDeploymentFormHandle } from "./TokenDeploymentForm";
 import { TokenSeriesTab } from "./TokenSeriesTab";
 import { TokenMintTab } from "./TokenMintTab";
 import { TokenInfuseTab } from "./TokenInfuseTab";
@@ -44,6 +45,8 @@ export function TokenActionsTabs({
   expandToken,
   selectedToken,
 }: TokenActionsTabsProps) {
+  const deployFormRef = useRef<TokenDeploymentFormHandle | null>(null);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -61,17 +64,23 @@ export function TokenActionsTabs({
 
       {activeTab === "deploy" && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Rocket size={18} />
-              Deploy New Token
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Create a new Carbon token on Phantasma blockchain
-            </p>
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Rocket size={18} />
+                Deploy New Token
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Create a new Carbon token on Phantasma blockchain
+              </p>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => deployFormRef.current?.reset()}>
+              Reset
+            </Button>
           </CardHeader>
           <CardContent>
             <TokenDeploymentForm
+              ref={deployFormRef}
               phaCtx={phaCtx}
               addLog={addLog}
               onRefreshTokens={onRefreshTokens}

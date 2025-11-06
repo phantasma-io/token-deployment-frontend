@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Upload,
@@ -25,6 +25,10 @@ type TokenDeploymentFormProps = {
   addLog: AddLogFn;
   onRefreshTokens: (ownerAddress: string) => Promise<void>;
   expandToken: (tokenKey: string) => void;
+};
+
+export type TokenDeploymentFormHandle = {
+  reset: () => void;
 };
 
 type MetadataField = { id: number; key: string; value: string };
@@ -153,12 +157,15 @@ function parseSupplyWithDecimals(raw: string, decimals: number, label: string) {
 
 
 
-export function TokenDeploymentForm({
-  phaCtx,
-  addLog,
-  onRefreshTokens,
-  expandToken,
-}: TokenDeploymentFormProps) {
+export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDeploymentFormProps>(function TokenDeploymentForm(
+  {
+    phaCtx,
+    addLog,
+    onRefreshTokens,
+    expandToken,
+  }: TokenDeploymentFormProps,
+  ref,
+) {
   const [isNFT, setIsNFT] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [name, setName] = useState("");
@@ -235,6 +242,8 @@ export function TokenDeploymentForm({
     setIsSchemasDefault(true);
     setTokenSchemasHasError(false);
   }, []);
+
+  useImperativeHandle(ref, () => ({ reset: resetForm }), [resetForm]);
 
   const metadataFieldsMap = useMemo(() => metadataFields, [metadataFields]);
 
@@ -992,9 +1001,6 @@ export function TokenDeploymentForm({
             </>
           )}
         </Button>
-        <Button variant="ghost" onClick={resetForm}>
-          Reset
-        </Button>
       </div>
 
       {!walletAddress && (
@@ -1101,4 +1107,4 @@ export function TokenDeploymentForm({
       </div>
     </div>
   );
-}
+});

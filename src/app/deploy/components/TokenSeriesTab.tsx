@@ -278,14 +278,8 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
         <CardTitle>
           Create series for <span className="font-mono">{tokenPrimary}</span>
         </CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={handleManualReset}
-          disabled={loading || submitting}
-        >
-          Reset form
+        <Button type="button" size="sm" variant="outline" onClick={handleManualReset} disabled={loading || submitting}>
+          Reset
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
