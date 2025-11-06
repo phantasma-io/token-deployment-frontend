@@ -42,3 +42,7 @@ s:
 reinstall:
     rm -rf node_modules package-lock.json
     npm install
+
+[group('manage')]
+switch-to-local-ts-sdk:
+    cd ../phantasma-sdk-ts && just rb && cd - && rm -r --force node_modules/phantasma-sdk-ts && cp -r ../phantasma-sdk-ts node_modules/ && just rb
