@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
-import { getTokenSchemasJson as getSchemasFromStore, setTokenSchemasJson as setSchemasInStore } from "@/lib/tokenSchemasStore";
 
 import type { AddLogFn } from "../types";
 
@@ -186,7 +185,7 @@ export function TokenDeploymentForm({
   const [tokenSchemasHasError, setTokenSchemasHasError] = useState<boolean>(false);
   const [schemasExpanded, setSchemasExpanded] = useState<boolean>(false);
   const [isSchemasDefault, setIsSchemasDefault] = useState<boolean>(true);
-  const [tokenSchemasJson, setTokenSchemasJson] = useState<string>(() => getSchemasFromStore() ?? "");
+  const [tokenSchemasJson, setTokenSchemasJson] = useState<string>("");
 
   const walletAddress = phaCtx?.conn?.link?.account?.address;
   const trimmedSymbol = symbol.trim();
@@ -231,9 +230,8 @@ export function TokenDeploymentForm({
     setMetadataFields([]);
     setMetadataIdCounter(0);
     setIsNFT(false);
-    // Reset token schemas state and storage to true defaults
+    // Reset token schemas state to true defaults
     setTokenSchemasJson("");
-    try { setSchemasInStore(null); } catch {}
     setIsSchemasDefault(true);
     setTokenSchemasHasError(false);
   }, []);

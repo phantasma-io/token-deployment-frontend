@@ -13,7 +13,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { setTokenSchemasJson, getTokenSchemasJson } from "@/lib/tokenSchemasStore";
 
 type Field = { id: string; name: string; type: string; standard?: boolean };
 
@@ -49,7 +48,6 @@ function nextId(prefix: string, n: number) {
 }
 
 export function TokenSchemasBuilder({ onChange, onStatusChange, initialPlacement = "rom", valueJson }: TokenSchemasBuilderProps) {
-  const persisted = typeof window !== "undefined" ? getTokenSchemasJson() : null;
   const [placement, setPlacement] = useState<Placement>(initialPlacement);
   const [seriesFields, setSeriesFields] = useState<Field[]>([]);
   const [romFields, setRomFields] = useState<Field[]>([]);
@@ -57,9 +55,9 @@ export function TokenSchemasBuilder({ onChange, onStatusChange, initialPlacement
   const [ctr, setCtr] = useState(0);
   const initedRef = useRef(false);
 
-  // Initialize from parent valueJson or persisted JSON or default preset
+  // Initialize from parent valueJson or fall back to default preset
   useEffect(() => {
-    const candidate = (valueJson && valueJson.trim().length ? valueJson : persisted);
+    const candidate = (valueJson && valueJson.trim().length ? valueJson : null);
     if (candidate) {
       try {
         const raw = JSON.parse(candidate);
@@ -112,10 +110,9 @@ export function TokenSchemasBuilder({ onChange, onStatusChange, initialPlacement
     return json;
   }, [seriesFields, romFields, ramFields, onChange]);
 
-  // Persist and notify parent only after initial state is set
+  // Notify parent only after initial state is set
   useEffect(() => {
     if (!initedRef.current) return;
-    try { setTokenSchemasJson(schemasJson); } catch {}
     onChange?.(schemasJson);
   }, [schemasJson]);
 

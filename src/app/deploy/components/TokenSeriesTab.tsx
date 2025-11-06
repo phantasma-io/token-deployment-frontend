@@ -39,6 +39,10 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const [royalties, setRoyalties] = useState("");
   const [romHex, setRomHex] = useState("0x"); // use 0x to indicate empty ROM by default
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [seriesId, setSeriesId] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
   const canSign = !!walletAddress && !!phaCtx?.conn;
@@ -48,6 +52,29 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     : "";
 
   const isNft = isTokenNFT(selectedToken || undefined);
+
+  const resetInputs = useCallback(() => {
+    setName("");
+    setDescription("");
+    setImageURL("");
+    setInfoURL("");
+    setRoyalties("");
+    setRomHex("0x");
+    setExtraValues((prev) => {
+      const cleared: Record<string, string> = {};
+      for (const key of Object.keys(prev)) {
+        cleared[key] = "";
+      }
+      return cleared;
+    });
+  }, []);
+
+  const handleManualReset = useCallback(() => {
+    resetInputs();
+    setSubmitError(null);
+    setTxHash(null);
+    setSeriesId(null);
+  }, [resetInputs]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -101,17 +128,12 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   useEffect(() => {
     setSeriesFields([]);
     setCarbonId(null);
-    setName("");
-    setDescription("");
-    setImageURL("");
-    setInfoURL("");
-    setRoyalties("");
-    setRomHex("0x");
+    resetInputs();
     setError(null);
     if (selectedToken?.symbol && isNft) {
       void loadTokenDetails();
     }
-  }, [selectedToken?.symbol, isNft, loadTokenDetails]);
+  }, [selectedToken?.symbol, isNft, loadTokenDetails, resetInputs]);
 
   const visibleStandard = useMemo(() => {
     const has = (n: string) => seriesFields.some((f) => f.name === n);
@@ -150,11 +172,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     }
     return true;
   }, [canSign, isNft, selectedToken, carbonId, visibleStandard, name, description, imageURL, infoURL, royalties, romHex, seriesFields, extraValues]);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [seriesId, setSeriesId] = useState<number | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleCreate = useCallback(async () => {
     if (!selectedToken?.symbol || !carbonId) return;
@@ -216,6 +233,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       setTxHash(res.txHash);
       if (res.seriesId !== undefined) setSeriesId(res.seriesId);
       addLog("[series] Created series", { txHash: res.txHash, seriesId: res.seriesId });
+      resetInputs();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setSubmitError(message);
@@ -223,7 +241,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     } finally {
       setSubmitting(false);
     }
-  }, [selectedToken?.symbol, carbonId, phaCtx?.conn, visibleStandard, name, description, imageURL, infoURL, royalties, romHex, addLog, seriesSchema, extraValues]);
+  }, [selectedToken?.symbol, carbonId, phaCtx?.conn, visibleStandard, name, description, imageURL, infoURL, royalties, romHex, addLog, seriesSchema, extraValues, resetInputs]);
 
   if (!selectedToken) {
     return (
@@ -256,10 +274,19 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>
           Create series for <span className="font-mono">{tokenPrimary}</span>
         </CardTitle>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleManualReset}
+          disabled={loading || submitting}
+        >
+          Reset form
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
