@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Upload,
@@ -95,6 +95,14 @@ function validateIconDataUri(dataUri: string): IconValidationResult {
 
   return { ok: true, mimeType };
 }
+
+const DEFAULT_FEES_AND_LIMITS = {
+  gasFeeBase: "10000",
+  gasFeeCreateTokenBase: "10000000000",
+  gasFeeCreateTokenSymbol: "10000000000",
+  gasFeeMultiplier: "10000",
+  maxDataLimit: "1000000000",
+};
 
 function parseBigIntField(raw: string, label: string, allowEmpty = false) {
   const trimmed = raw.trim();
@@ -193,6 +201,8 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
   const [schemasExpanded, setSchemasExpanded] = useState<boolean>(false);
   const [isSchemasDefault, setIsSchemasDefault] = useState<boolean>(true);
   const [tokenSchemasJson, setTokenSchemasJson] = useState<string>("");
+  const [feesExpanded, setFeesExpanded] = useState<boolean>(false);
+  const [isFeesDefault, setIsFeesDefault] = useState<boolean>(true);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address;
   const trimmedSymbol = symbol.trim();
@@ -222,11 +232,11 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     setDecimals(8);
     setLastFungibleDecimals(8);
     setMaxSupply("0");
-    setGasFeeBase("10000");
-    setGasFeeCreateTokenBase("10000000000");
-    setGasFeeCreateTokenSymbol("10000000000");
-    setGasFeeMultiplier("10000");
-    setMaxDataLimit("1000000000");
+    setGasFeeBase(DEFAULT_FEES_AND_LIMITS.gasFeeBase);
+    setGasFeeCreateTokenBase(DEFAULT_FEES_AND_LIMITS.gasFeeCreateTokenBase);
+    setGasFeeCreateTokenSymbol(DEFAULT_FEES_AND_LIMITS.gasFeeCreateTokenSymbol);
+    setGasFeeMultiplier(DEFAULT_FEES_AND_LIMITS.gasFeeMultiplier);
+    setMaxDataLimit(DEFAULT_FEES_AND_LIMITS.maxDataLimit);
     setIconDataUri(null);
     setIconFileName(null);
     setManualIconInput("");
@@ -241,9 +251,21 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     setTokenSchemasJson("");
     setIsSchemasDefault(true);
     setTokenSchemasHasError(false);
+    setFeesExpanded(false);
+    setIsFeesDefault(true);
   }, []);
 
   useImperativeHandle(ref, () => ({ reset: resetForm }), [resetForm]);
+
+  useEffect(() => {
+    const isDefault =
+      gasFeeBase === DEFAULT_FEES_AND_LIMITS.gasFeeBase &&
+      gasFeeCreateTokenBase === DEFAULT_FEES_AND_LIMITS.gasFeeCreateTokenBase &&
+      gasFeeCreateTokenSymbol === DEFAULT_FEES_AND_LIMITS.gasFeeCreateTokenSymbol &&
+      gasFeeMultiplier === DEFAULT_FEES_AND_LIMITS.gasFeeMultiplier &&
+      maxDataLimit === DEFAULT_FEES_AND_LIMITS.maxDataLimit;
+    setIsFeesDefault(isDefault);
+  }, [gasFeeBase, gasFeeCreateTokenBase, gasFeeCreateTokenSymbol, gasFeeMultiplier, maxDataLimit]);
 
   const metadataFieldsMap = useMemo(() => metadataFields, [metadataFields]);
 
@@ -910,71 +932,91 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
 
       <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
         <div className="flex items-center justify-between">
-          <div>
+          <button
+            type="button"
+            className="flex items-center gap-2 text-left focus:outline-none"
+            onClick={() => setFeesExpanded((p) => !p)}
+            aria-expanded={feesExpanded}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className={`h-4 w-4 transition-transform ${feesExpanded ? "rotate-180" : ""}`}
+            >
+              <path fillRule="evenodd" d="M12 15.75a.75.75 0 0 1-.53-.22l-5-5a.75.75 0 1 1 1.06-1.06L12 13.94l4.47-4.47a.75.75 0 0 1 1.06 1.06l-5 5a.75.75 0 0 1-.53.22z" clipRule="evenodd" />
+            </svg>
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Fees &amp; limits
             </h3>
+            {isFeesDefault && (
+              <span className="text-xs text-emerald-600 ml-2">Using default fees and limits</span>
+            )}
+          </button>
+        </div>
+
+        {feesExpanded ? (
+          <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Configure Carbon gas fees and payload limits before deploying.
             </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Gas fee base
+                </label>
+                <input
+                  className="w-full rounded border px-2 py-1 font-mono"
+                  inputMode="numeric"
+                  value={gasFeeBase}
+                  onChange={(e) => setGasFeeBase(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Gas fee (create token base)
+                </label>
+                <input
+                  className="w-full rounded border px-2 py-1 font-mono"
+                  inputMode="numeric"
+                  value={gasFeeCreateTokenBase}
+                  onChange={(e) => setGasFeeCreateTokenBase(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Gas fee (create token symbol)
+                </label>
+                <input
+                  className="w-full rounded border px-2 py-1 font-mono"
+                  inputMode="numeric"
+                  value={gasFeeCreateTokenSymbol}
+                  onChange={(e) => setGasFeeCreateTokenSymbol(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Fee multiplier
+                </label>
+                <input
+                  className="w-full rounded border px-2 py-1 font-mono"
+                  inputMode="numeric"
+                  value={gasFeeMultiplier}
+                  onChange={(e) => setGasFeeMultiplier(e.target.value)}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1">Max data</label>
+                <input
+                  className="w-full rounded border px-2 py-1 font-mono"
+                  inputMode="numeric"
+                  value={maxDataLimit}
+                  onChange={(e) => setMaxDataLimit(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Gas fee base
-            </label>
-            <input
-              className="w-full rounded border px-2 py-1 font-mono"
-              inputMode="numeric"
-              value={gasFeeBase}
-              onChange={(e) => setGasFeeBase(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Gas fee (create token base)
-            </label>
-            <input
-              className="w-full rounded border px-2 py-1 font-mono"
-              inputMode="numeric"
-              value={gasFeeCreateTokenBase}
-              onChange={(e) => setGasFeeCreateTokenBase(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Gas fee (create token symbol)
-            </label>
-            <input
-              className="w-full rounded border px-2 py-1 font-mono"
-              inputMode="numeric"
-              value={gasFeeCreateTokenSymbol}
-              onChange={(e) => setGasFeeCreateTokenSymbol(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Fee multiplier
-            </label>
-            <input
-              className="w-full rounded border px-2 py-1 font-mono"
-              inputMode="numeric"
-              value={gasFeeMultiplier}
-              onChange={(e) => setGasFeeMultiplier(e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Max data</label>
-            <input
-              className="w-full rounded border px-2 py-1 font-mono"
-              inputMode="numeric"
-              value={maxDataLimit}
-              onChange={(e) => setMaxDataLimit(e.target.value)}
-            />
-          </div>
-        </div>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">
