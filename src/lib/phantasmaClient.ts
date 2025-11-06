@@ -25,6 +25,8 @@ import {
   // Series creation imports
   CreateSeriesFeeOptions,
   CreateTokenSeriesTxHelper,
+  SeriesInfoBuilder,
+  MetadataField,
   SeriesInfo,
   VmStructSchema,
   VmType,
@@ -90,16 +92,13 @@ export async function getTokens(ownerAddress: string): Promise<Token[]> {
  * Fetch a single token by symbol with extended data (schemas, carbon id).
  * Returns the raw RPC object as provided by the node.
  */
-// Reuse temporary SDK shims
-import { TokenSeriesMetadataBuilder } from "phantasma-sdk-ts";
-
 export async function getTokenExtended(symbol: string): Promise<Token> {
   if (!symbol || !symbol.trim()) {
     throw new Error("symbol is required");
   }
   const api = createApi();
   try {
-    // Server updated to TS SDK-compatible signature (symbol, extended)
+    // PhantasmaAPI.getToken(symbol, extended, carbonTokenId)
     return await api.getToken(symbol, true, 0n);
   } catch (error: unknown) {
     console.error("[error] getTokenExtended: RPC call failed", { error });
@@ -187,7 +186,7 @@ export async function deployCarbonToken(
   try {
     txMsg = CreateTokenTxHelper.buildTx(
       tokenInfoInstance,
-      ownerBytes32 ?? tokenInfoInstance.owner ?? new Bytes32(),
+      ownerBytes32,
       feeOptions,
       maxData,
       expiryValue,
@@ -237,9 +236,6 @@ export async function deployCarbonToken(
   let tokenId: number | undefined = undefined;
 
     if (txHash) {
-    
-    const isSuccessOutcome = (o: TransactionWaitOutcome): o is { status: "success"; tx: TransactionData } => o.status === "success";
-    const isFailureOutcome = (o: TransactionWaitOutcome): o is { status: "failure"; tx: TransactionData; message?: string } => o.status === "failure";
     const api = createApi();
     const confirmation = await waitForTransactionConfirmation(api, txHash, {
       maxAttempts: 30,
@@ -448,7 +444,7 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
   try {
     const phantasmaSeriesId = await getRandomPhantasmaId();
     // Build MetadataField[] for SDK builder. 'rom' must be Uint8Array (VmType.Bytes).
-    const metadataList: { name: string; value: string | number | Uint8Array | bigint }[] = [];
+    const metadataList: MetadataField[] = [];
 
     // Include ROM only when non-empty, as per SDK expectations.
     if (romBytes && romBytes.length > 0) {
@@ -503,19 +499,15 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
       metadataList.push({ name: key, value: val });
     }
 
-    const metadataBytes = TokenSeriesMetadataBuilder.buildAndSerialize(
+    // Use SDK builder for SeriesInfo (avoids local duplication)
+    seriesInfo = SeriesInfoBuilder.build(
       seriesSchema,
       phantasmaSeriesId,
-      metadataList as any, // SDK expects MetadataField[]; runtime shape matches
+      0,
+      0,
+      creatorPk,
+      metadataList,
     );
-    seriesInfo = new SeriesInfo({
-      maxMint: 0,
-      maxSupply: 0,
-      owner: creatorPk,
-      metadata: metadataBytes,
-      rom: new VmStructSchema(),
-      ram: new VmStructSchema(),
-    });
   } catch (err: unknown) {
     return { success: false, error: `Failed to build SeriesInfo: ${toMessage(err)}` };
   }
