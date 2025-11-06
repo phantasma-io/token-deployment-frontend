@@ -5,7 +5,7 @@ import { Plus, Trash2, Layers, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { VM_TYPE_OPTIONS } from "@/lib/carbonSchemas";
-import { TokenSchemasBuilder as SdkTokenSchemasBuilder } from "phantasma-sdk-ts";
+import { standardMetadataFields } from "phantasma-sdk-ts";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,8 +34,8 @@ type TokenSchemasBuilderProps = {
 };
 
 
-// Standard metadata fields as per TokenSchemasBuilder.standardMetadataFields in the updated SDK
-const STANDARD_FIELDS_ORDERED: Field[] = SdkTokenSchemasBuilder.standardMetadataFields.map((f: any, i: number) => {
+// Standard metadata fields (SDK)
+const STANDARD_FIELDS_ORDERED: Field[] = standardMetadataFields.map((f: any, i: number) => {
   const name = String(f.name);
   const type = name === "royalties" ? "Int32" : "String";
   return { id: `std-${i}`, name, type, standard: true };

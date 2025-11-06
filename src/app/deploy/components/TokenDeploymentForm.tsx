@@ -11,14 +11,13 @@ import {
   XCircle,
   Info,
 } from "lucide-react";
-import { CreateTokenFeeOptions, TokenInfoBuilder } from "phantasma-sdk-ts";
+import { CreateTokenFeeOptions, TokenInfoBuilder, TokenSchemasBuilder } from "phantasma-sdk-ts";
 
 import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
 import { getTokenSchemasJson as getSchemasFromStore, setTokenSchemasJson as setSchemasInStore } from "@/lib/tokenSchemasStore";
-import { TokenSchemasBuilder as SDKTokenSchemasBuilder } from "phantasma-sdk-ts";
 
 import type { AddLogFn } from "../types";
 
@@ -316,7 +315,7 @@ export function TokenDeploymentForm({
       }
       try {
         // Let SDK parse/validate JSON
-        SDKTokenSchemasBuilder.fromJson(js);
+        TokenSchemasBuilder.fromJson(js);
       } catch (e: any) {
         const msg = e?.message ?? String(e);
         addLog("[error] Token schemas JSON invalid", { error: msg });

@@ -81,7 +81,9 @@ export function TokenActionsTabs({
         </Card>
       )}
 
-      {activeTab === "series" && <TokenSeriesTab selectedToken={selectedToken} />}
+      {activeTab === "series" && (
+        <TokenSeriesTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
+      )}
 
       {activeTab === "mint" && <TokenMintTab selectedToken={selectedToken} />}
 
