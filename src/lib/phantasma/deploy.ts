@@ -69,6 +69,11 @@ export async function deployCarbonToken(
   const ownerBytes32 = new Bytes32(publicKeyBytes);
 
   let tokenInfoInstance: DeploymentTokenInfo;
+  if (!metadata || Object.keys(metadata).length === 0) {
+    return { success: false, error: "Token metadata is required" };
+  }
+
+  let serializedMetadata: Uint8Array;
   let tokenSchemas: TokenSchemas | undefined;
   if (isNFT) {
     if (!tokenSchemasJson || !tokenSchemasJson.trim()) {
@@ -85,13 +90,19 @@ export async function deployCarbonToken(
   }
 
   try {
+    serializedMetadata = TokenMetadataBuilder.buildAndSerialize(metadata);
+  } catch (err: unknown) {
+    return { success: false, error: `Invalid token metadata: ${toMessage(err)}` };
+  }
+
+  try {
     tokenInfoInstance = TokenInfoBuilder.build(
       symbol.trim(),
       IntX.fromBigInt(maxSupply),
       isNFT,
       decimals,
       ownerBytes32,
-      TokenMetadataBuilder.buildAndSerialize(metadata),
+      serializedMetadata,
       tokenSchemas,
     );
   } catch {
@@ -100,6 +111,8 @@ export async function deployCarbonToken(
       error: "Failed to build TokenInfo struct",
     };
   }
+
+  tokenInfoInstance.metadata = serializedMetadata;
 
   const expiryValue: bigint | undefined =
     expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
