@@ -1,0 +1,212 @@
+import {
+  Bytes32,
+  EasyConnect,
+  MintNftFeeOptions,
+  MintNonFungibleTxHelper,
+  MetadataField,
+  NftRomBuilder,
+  TransactionData,
+  VmStructSchema,
+  VmType,
+  getRandomPhantasmaId,
+} from "phantasma-sdk-ts";
+
+import { createApi } from "./api";
+import { ensureError, toMessage } from "./errors";
+import { waitForTransactionConfirmation } from "./tx";
+import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
+import { parseHexBytes, parseVmMetadataValue } from "./metadata";
+
+export type MintNftParams = {
+  conn: EasyConnect;
+  carbonTokenId: bigint | number;
+  carbonSeriesId: number;
+  romSchema: VmStructSchema;
+  metadataValues: Record<string, string>;
+  romHex: string;
+  feeOptions?: MintNftFeeOptions;
+  maxData?: bigint | number;
+  expiry?: bigint | number | null;
+  addLog?: (message: string, data?: unknown) => void;
+};
+
+export type MintNftResult =
+  | {
+      success: true;
+      txHash: string;
+      carbonNftAddresses?: string[];
+      phantasmaNftId: string;
+      result?: unknown;
+    }
+  | { success: false; error: string };
+
+export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
+  const {
+    conn,
+    carbonTokenId,
+    carbonSeriesId,
+    romSchema,
+    metadataValues,
+    romHex,
+    feeOptions,
+    maxData,
+    expiry,
+    addLog,
+  } = params;
+
+  if (!conn) {
+    return { success: false, error: "Wallet connection (conn) is required" };
+  }
+  if (!romSchema) {
+    return { success: false, error: "romSchema is required" };
+  }
+
+  let romBytes: Uint8Array;
+  try {
+    romBytes = parseHexBytes(romHex, "rom");
+  } catch (err: unknown) {
+    return { success: false, error: toMessage(err) };
+  }
+
+  const metadata: MetadataField[] = [{ name: "rom", value: romBytes }];
+  const schemaFields = romSchema.fields ?? [];
+
+  for (const field of schemaFields) {
+    const name = String(field?.name?.data ?? "");
+    if (!name || name === "_i" || name === "rom" || name === "id") {
+      continue;
+    }
+
+    const rawValue = metadataValues[name] ?? "";
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+      return { success: false, error: `Metadata field '${name}' is required` };
+    }
+
+    const vmType = field?.schema?.type as VmType;
+    let parsedValue: string | number | bigint | Uint8Array;
+    try {
+      parsedValue = parseVmMetadataValue(vmType, trimmed, name);
+    } catch (err: unknown) {
+      return { success: false, error: toMessage(err) };
+    }
+
+    metadata.push({ name, value: parsedValue });
+  }
+
+  addLog?.("[mint] Prepared metadata payload", {
+    keys: metadata.map((f) => f.name),
+  });
+
+  const phantasmaNftId = await getRandomPhantasmaId();
+
+  let romPayload: Uint8Array;
+  try {
+    romPayload = NftRomBuilder.buildAndSerialize(romSchema, phantasmaNftId, metadata);
+  } catch (err: unknown) {
+    return { success: false, error: `Failed to serialize ROM metadata: ${toMessage(err)}` };
+  }
+
+  const publicKeyBytes = extractPublicKeyBytes(conn);
+  const senderPk = new Bytes32(publicKeyBytes);
+  const receiverPk = senderPk; // Mint to self for now
+
+  const effectiveFee = feeOptions ?? new MintNftFeeOptions();
+  const normalizedMaxData =
+    maxData !== undefined && maxData !== null ? BigInt(maxData as number | bigint) : undefined;
+  const expiryValue =
+    expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
+
+  let txMsg;
+  try {
+    txMsg = MintNonFungibleTxHelper.buildTx(
+      BigInt(carbonTokenId as number | bigint),
+      Number(carbonSeriesId),
+      senderPk,
+      receiverPk,
+      romPayload,
+      new Uint8Array(),
+      effectiveFee,
+      normalizedMaxData,
+      expiryValue,
+    );
+  } catch (err: unknown) {
+    return { success: false, error: `Failed to build mint transaction: ${toMessage(err)}` };
+  }
+
+  addLog?.("[mint] Requesting wallet signature", { carbonSeriesId, carbonTokenId: String(carbonTokenId) });
+
+  let walletResult: { hash: string; id: number; success: boolean };
+  try {
+    walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
+      conn.signCarbonTransaction(
+        txMsg,
+        (res: unknown) => {
+          if (!isWalletSignResult(res)) {
+            reject(new Error("Unexpected wallet response"));
+            return;
+          }
+          if (res.success === false) {
+            reject(new Error(res.error || "Wallet rejected transaction"));
+            return;
+          }
+          resolve({ hash: res.hash, id: res.id, success: true });
+        },
+        (err: unknown) => {
+          reject(ensureError(err));
+        },
+      );
+    });
+  } catch (err: unknown) {
+    return { success: false, error: toMessage(err) || "Wallet rejected transaction" };
+  }
+
+  const txHash = walletResult.hash;
+  let carbonNftAddresses: string[] | undefined;
+
+  if (txHash) {
+    const api = createApi();
+    const confirmation = await waitForTransactionConfirmation(api, txHash, {
+      maxAttempts: 30,
+      delayMs: 1000,
+      failureDetailAttempts: 6,
+    });
+
+    if (confirmation.status === "success") {
+      const txInfo = (confirmation as { status: "success"; tx: TransactionData }).tx;
+      if (typeof txInfo?.result === "string") {
+        try {
+          const parsed = MintNonFungibleTxHelper.parseResult(
+            BigInt(carbonTokenId as number | bigint),
+            txInfo.result,
+          );
+          carbonNftAddresses = parsed.map((addr) => addr?.ToHex?.() ?? "");
+        } catch {
+          carbonNftAddresses = undefined;
+        }
+      }
+    } else if (confirmation.status === "failure") {
+      const failure = confirmation as { status: "failure"; tx: TransactionData; message?: string };
+      const message = failure.message
+        ? failure.message
+        : "Transaction execution failed";
+      return { success: false, error: `Transaction ${txHash} failed: ${message}` };
+    } else {
+      return { success: false, error: `Transaction ${txHash} confirmation timed out` };
+    }
+  }
+
+  addLog?.("[mint] Mint transaction submitted", {
+    txHash,
+    carbonNftAddresses,
+    phantasmaNftId: phantasmaNftId.toString(),
+  });
+
+  return {
+    success: true,
+    txHash: txHash || "pending",
+    carbonNftAddresses,
+    phantasmaNftId: phantasmaNftId.toString(),
+    result: walletResult,
+  };
+}

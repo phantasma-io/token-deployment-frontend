@@ -9,5 +9,8 @@ export {
   createSeries,
   type CreateSeriesParams,
   type CreateSeriesResult,
+  listTokenSeries,
+  type TokenSeriesListItem,
 } from "./phantasma/series";
+export { mintNft, type MintNftParams, type MintNftResult } from "./phantasma/mint";
 // No other exports here on purpose, prefer importing from above modules if needed.

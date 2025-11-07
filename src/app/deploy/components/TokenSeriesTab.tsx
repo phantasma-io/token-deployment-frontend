@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Token, EasyConnect, VmStructSchema, standardMetadataFields, seriesDefaultMetadataFields, VmStructSchemaResult, vmStructSchemaFromRpcResult } from "phantasma-sdk-ts";
+import { Token, EasyConnect, VmStructSchema, standardMetadataFields, seriesDefaultMetadataFields, VmStructSchemaResult, vmStructSchemaFromRpcResult, VmType } from "phantasma-sdk-ts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Loader2, Rocket, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
+import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import type { AddLogFn } from "../types";
 import { createSeries, getTokenExtended } from "@/lib/phantasmaClient";
 
@@ -147,8 +148,19 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     };
   }, [seriesFields]);
 
+  const schemaFieldMap = useMemo(() => {
+    const map = new Map<string, VmType>();
+    const fields = seriesSchema?.fields ?? [];
+    for (const field of fields) {
+      const key = String(field?.name?.data ?? "");
+      if (!key) continue;
+      map.set(key, field?.schema?.type as VmType);
+    }
+    return map;
+  }, [seriesSchema]);
+
   const formValid = useMemo(() => {
-    if (!canSign || !isNft || !selectedToken || !carbonId) return false;
+    if (!canSign || !isNft || !selectedToken || !carbonId || !seriesSchema) return false;
     // All fields from schema (excluding id/mode) are required
     if (visibleStandard.name && !name.trim()) return false;
     if (visibleStandard.description && !description.trim()) return false;
@@ -158,20 +170,54 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       if (!/^[-]?\d+$/.test(royalties.trim())) return false;
     }
     // All custom fields must be non-empty
-    for (const f of seriesFields) {
-      const k = String(f.name);
-      if (["_i", "mode", "rom", "name", "description", "imageURL", "infoURL", "royalties"].includes(k)) continue;
-      if (!extraValues[k] || extraValues[k].trim() === "") return false;
-    }
-    if (visibleStandard.rom) {
-      const v = romHex.trim();
-      if (!v) return false;
-      const normalized = v.startsWith("0x") || v.startsWith("0X") ? v.slice(2) : v;
-      if (!(normalized.length === 0 || /^[0-9a-fA-F]+$/.test(normalized))) return false;
-      if (normalized.length % 2 !== 0) return false;
+    if (visibleStandard.rom && !isHexValueValid(romHex)) return false;
+
+    const fields = seriesSchema.fields ?? [];
+    for (const field of fields) {
+      const key = String(field?.name?.data ?? "");
+      if (!key || key === "_i" || key === "mode" || key === "rom") continue;
+      let raw = "";
+      switch (key) {
+        case "name":
+          raw = name;
+          break;
+        case "description":
+          raw = description;
+          break;
+        case "imageURL":
+          raw = imageURL;
+          break;
+        case "infoURL":
+          raw = infoURL;
+          break;
+        case "royalties":
+          raw = royalties;
+          break;
+        default:
+          raw = extraValues[key] ?? "";
+          break;
+      }
+      if (!raw || !raw.trim()) return false;
+      const vmType = schemaFieldMap.get(key);
+      if (vmType !== undefined && !isVmValueValid(vmType, raw.trim())) return false;
     }
     return true;
-  }, [canSign, isNft, selectedToken, carbonId, visibleStandard, name, description, imageURL, infoURL, royalties, romHex, seriesFields, extraValues]);
+  }, [
+    canSign,
+    isNft,
+    selectedToken,
+    carbonId,
+    seriesSchema,
+    visibleStandard,
+    name,
+    description,
+    imageURL,
+    infoURL,
+    royalties,
+    romHex,
+    extraValues,
+    schemaFieldMap,
+  ]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedToken?.symbol || !carbonId) return;

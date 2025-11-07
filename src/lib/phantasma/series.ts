@@ -3,20 +3,103 @@ import {
   CreateSeriesFeeOptions,
   CreateTokenSeriesTxHelper,
   EasyConnect,
+  CursorPaginatedResult,
+  MetadataField,
+  TokenSeriesResult,
   SeriesInfo,
   SeriesInfoBuilder,
   TransactionData,
   VmStructSchema,
   VmType,
   getRandomPhantasmaId,
-  hexToBytes,
-  MetadataField,
 } from "phantasma-sdk-ts";
 
 import { ensureError, toMessage } from "./errors";
 import { createApi } from "./api";
 import { waitForTransactionConfirmation } from "./tx";
-import { extractPublicKeyBytes } from "./wallet";
+import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
+import { parseHexBytes, parseVmMetadataValue } from "./metadata";
+
+export type TokenSeriesListItem = {
+  carbonTokenId: bigint;
+  carbonSeriesId: number;
+  seriesId: string;
+  metadata: Record<string, string>;
+};
+
+const MAX_SERIES_PAGE_LOOPS = 10;
+
+export async function listTokenSeries(
+  symbol: string,
+  carbonTokenId: bigint | number,
+  pageSize: number = 50,
+): Promise<TokenSeriesListItem[]> {
+  if ((!symbol || !symbol.trim()) && (carbonTokenId === undefined || carbonTokenId === null)) {
+    throw new Error("symbol or carbonTokenId is required");
+  }
+
+  const api = createApi();
+  const normalizedTokenId = BigInt(carbonTokenId);
+  const collected: TokenSeriesListItem[] = [];
+
+  let cursor = "";
+  let loops = 0;
+
+  try {
+    while (true) {
+      const page: CursorPaginatedResult<TokenSeriesResult | TokenSeriesResult[]> = await api.getTokenSeries(
+        symbol,
+        normalizedTokenId,
+        pageSize,
+        cursor,
+      );
+      const payload = page?.result;
+      const items: TokenSeriesResult[] = Array.isArray(payload)
+        ? payload
+        : payload
+          ? [payload]
+          : [];
+
+      for (const entry of items) {
+        const meta: Record<string, string> = {};
+        if (Array.isArray(entry.metadata)) {
+          for (const prop of entry.metadata) {
+            if (prop?.key) {
+              meta[String(prop.key)] = String(prop.value ?? "");
+            }
+          }
+        }
+        let tokenIdForEntry = normalizedTokenId;
+        if (entry?.carbonTokenId) {
+          try {
+            tokenIdForEntry = BigInt(entry.carbonTokenId);
+          } catch {
+            tokenIdForEntry = normalizedTokenId;
+          }
+        }
+        collected.push({
+          carbonTokenId: tokenIdForEntry,
+          carbonSeriesId: entry.carbonSeriesId,
+          seriesId: entry.seriesId,
+          metadata: meta,
+        });
+      }
+
+      if (!page?.cursor) {
+        break;
+      }
+      cursor = page.cursor;
+      loops += 1;
+      if (loops >= MAX_SERIES_PAGE_LOOPS) {
+        break;
+      }
+    }
+  } catch (error: unknown) {
+    throw ensureError(error);
+  }
+
+  return collected;
+}
 
 export type CreateSeriesParams = {
   conn: EasyConnect;
@@ -62,25 +145,9 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
   const creatorPk = new Bytes32(publicKeyBytes);
 
   // Parse ROM hex (supports with or without 0x prefix)
-  let romBytes: Uint8Array | undefined = undefined;
+  let romBytes: Uint8Array;
   try {
-    const hex = (romHex || "").trim();
-    if (hex.length > 0) {
-      const normalized = hex.startsWith("0x") || hex.startsWith("0X") ? hex.slice(2) : hex;
-      if (normalized.length === 0) {
-        romBytes = new Uint8Array();
-      } else {
-        if (!/^[0-9a-fA-F]+$/.test(normalized)) {
-          return { success: false, error: "ROM value must be a hex string" };
-        }
-        if (normalized.length % 2 !== 0) {
-          return { success: false, error: "ROM hex length must be even" };
-        }
-        romBytes = hexToBytes(normalized);
-      }
-    } else {
-      romBytes = new Uint8Array();
-    }
+    romBytes = parseHexBytes(romHex ?? "", "rom");
   } catch (err: unknown) {
     return { success: false, error: `Invalid ROM hex: ${toMessage(err)}` };
   }
@@ -100,49 +167,15 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
     // Map schema fields to typed values from seriesValues
     const fields = seriesSchema?.fields ?? [];
     for (const f of fields) {
-      const key = String(f?.name?.data ?? '');
-      if (!key || key === '_i' || key === 'mode' || key === 'rom') continue;
-      const t = f.schema?.type as number; // VmType at runtime
-      const raw = seriesValues[key] ?? '';
-
-      let val: string | number | Uint8Array | bigint;
-      if (t === VmType.String) {
-        val = raw;
-      } else if (
-        t === VmType.Int8 ||
-        t === VmType.Int16 ||
-        t === VmType.Int32
-      ) {
-        if (!/^[-]?\d+$/.test(raw.trim())) {
-          return { success: false, error: `Invalid integer for '${key}'` };
-        }
-        val = Number.parseInt(raw.trim(), 10);
-      } else if (
-        t === VmType.Int64 ||
-        t === VmType.Int256
-      ) {
-        if (!/^[-]?\d+$/.test(raw.trim())) {
-          return { success: false, error: `Invalid bigint for '${key}'` };
-        }
-        val = BigInt(raw.trim());
-      } else if (
-        t === VmType.Bytes ||
-        t === VmType.Bytes16 ||
-        t === VmType.Bytes32 ||
-        t === VmType.Bytes64
-      ) {
-        const s = raw.trim();
-        const normalized = s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s;
-        if (normalized.length % 2 !== 0 || (normalized.length > 0 && !/^[0-9a-fA-F]+$/.test(normalized))) {
-          return { success: false, error: `Invalid hex for '${key}'` };
-        }
-        val = normalized.length > 0 ? hexToBytes(normalized) : new Uint8Array();
-      } else {
-        // Default to string if type is not explicitly handled (SDK will validate)
-        val = raw;
+      const key = String(f?.name?.data ?? "");
+      if (!key || key === "_i" || key === "mode" || key === "rom") continue;
+      const vmType = f.schema?.type as VmType;
+      try {
+        const parsedValue = parseVmMetadataValue(vmType, (seriesValues[key] ?? "").trim(), key);
+        metadataList.push({ name: key, value: parsedValue });
+      } catch (err: unknown) {
+        return { success: false, error: toMessage(err) };
       }
-
-      metadataList.push({ name: key, value: val });
     }
 
     // Use SDK builder for SeriesInfo (avoids local duplication)
@@ -239,10 +272,3 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
 
   return { success: true, txHash: txHash || "pending", seriesId, result: walletResult };
 }
-
-function isWalletSignResult(x: unknown): x is { hash: string; id: number; success: boolean; error?: string } {
-  if (!x || typeof x !== "object") return false;
-  const v = x as Record<string, unknown>;
-  return typeof v.hash === "string" && typeof v.id === "number" && typeof v.success === "boolean";
-}
-

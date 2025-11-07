@@ -94,7 +94,9 @@ export function TokenActionsTabs({
         <TokenSeriesTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
       )}
 
-      {activeTab === "mint" && <TokenMintTab selectedToken={selectedToken} />}
+      {activeTab === "mint" && (
+        <TokenMintTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
+      )}
 
       {activeTab === "infuse" && (
         <TokenInfuseTab selectedToken={selectedToken} />

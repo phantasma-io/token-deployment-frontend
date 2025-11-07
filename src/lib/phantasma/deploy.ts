@@ -15,7 +15,7 @@ import {
 import { createApi } from "./api";
 import { ensureError, toMessage } from "./errors";
 import { waitForTransactionConfirmation } from "./tx";
-import { extractPublicKeyBytes } from "./wallet";
+import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
 
 export type DeployParams = {
   conn: EasyConnect; // wallet connection object (phaCtx.conn)
@@ -188,10 +188,3 @@ export async function deployCarbonToken(
     result: walletResult,
   };
 }
-
-function isWalletSignResult(x: unknown): x is { hash: string; id: number; success: boolean; error?: string } {
-  if (!x || typeof x !== "object") return false;
-  const v = x as Record<string, unknown>;
-  return typeof v.hash === "string" && typeof v.id === "number" && typeof v.success === "boolean";
-}
-

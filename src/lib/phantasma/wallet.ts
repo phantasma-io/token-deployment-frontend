@@ -27,3 +27,10 @@ export function extractPublicKeyBytes(conn: EasyConnect): Uint8Array {
   return pkBytes;
 }
 
+export type WalletSignResult = { hash: string; id: number; success: boolean; error?: string };
+
+export function isWalletSignResult(x: unknown): x is WalletSignResult {
+  if (!x || typeof x !== "object") return false;
+  const v = x as Record<string, unknown>;
+  return typeof v.hash === "string" && typeof v.id === "number" && typeof v.success === "boolean";
+}
