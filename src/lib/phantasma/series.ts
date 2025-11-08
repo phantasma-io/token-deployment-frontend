@@ -70,6 +70,7 @@ export async function listTokenSeries(
           }
         }
         let tokenIdForEntry = normalizedTokenId;
+        let seriesIdValue: number | null = null;
         if (entry?.carbonTokenId) {
           try {
             tokenIdForEntry = BigInt(entry.carbonTokenId);
@@ -77,9 +78,16 @@ export async function listTokenSeries(
             tokenIdForEntry = normalizedTokenId;
           }
         }
+        if (entry?.carbonSeriesId !== undefined && entry?.carbonSeriesId !== null) {
+          const parsed = Number(entry.carbonSeriesId);
+          if (!Number.isNaN(parsed)) {
+            seriesIdValue = parsed;
+          }
+        }
+        if (seriesIdValue === null) continue;
         collected.push({
           carbonTokenId: tokenIdForEntry,
-          carbonSeriesId: entry.carbonSeriesId,
+          carbonSeriesId: seriesIdValue,
           seriesId: entry.seriesId,
           metadata: meta,
         });

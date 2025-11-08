@@ -10,6 +10,7 @@ import {
   standardMetadataFields,
   nftDefaultMetadataFields,
   VmType,
+  NFT,
 } from "phantasma-sdk-ts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, Sparkles, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
+import { Loader2, Sparkles, CheckCircle2, XCircle, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
@@ -29,9 +30,11 @@ import type { AddLogFn } from "../types";
 import {
   getTokenExtended,
   listTokenSeries,
+  listTokenNfts,
   mintNft,
   type TokenSeriesListItem,
 } from "@/lib/phantasmaClient";
+import { NftPreviewCard } from "./NftPreviewCard";
 
 type PhaCtxMinimal = {
   conn?: EasyConnect | null;
@@ -47,6 +50,7 @@ type RomField = { name: string; type: string | number };
 
 const DEFAULT_ROM_HEX = "0x";
 const DEFAULT_MAX_DATA = 100000000n;
+const NFT_PAGE_SIZE = 10;
 
 export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProps) {
   const [loadingToken, setLoadingToken] = useState(false);
@@ -73,6 +77,12 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [txHash, setTxHash] = useState<string | null>(null);
   const [mintedAddresses, setMintedAddresses] = useState<string[] | null>(null);
   const [phantasmaNftId, setPhantasmaNftId] = useState<string | null>(null);
+  const [seriesNfts, setSeriesNfts] = useState<NFT[]>([]);
+  const [nftLoading, setNftLoading] = useState(false);
+  const [nftError, setNftError] = useState<string | null>(null);
+  const [nftNextCursor, setNftNextCursor] = useState<string | null>(null);
+  const [nftCursorHistory, setNftCursorHistory] = useState<string[]>([""]);
+  const [nftPageIndex, setNftPageIndex] = useState(0);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
   const canSign = !!walletAddress && !!phaCtx?.conn;
@@ -99,13 +109,23 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     });
   }, []);
 
+  const resetNftListing = useCallback(() => {
+    setSeriesNfts([]);
+    setNftLoading(false);
+    setNftError(null);
+    setNftNextCursor(null);
+    setNftCursorHistory([""]);
+    setNftPageIndex(0);
+  }, []);
+
   const handleManualReset = useCallback(() => {
     resetInputs();
     setMintError(null);
     setTxHash(null);
     setMintedAddresses(null);
     setPhantasmaNftId(null);
-  }, [resetInputs]);
+    resetNftListing();
+  }, [resetInputs, resetNftListing]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -193,6 +213,56 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     [addLog],
   );
 
+  const loadSeriesNfts = useCallback(
+    async (
+      cursor: string,
+      opts?: { reset?: boolean; pageIndex?: number; preserveHistory?: boolean },
+    ) => {
+      if (!selectedSeriesId || !carbonId) return;
+      setNftLoading(true);
+      setNftError(null);
+      try {
+        const res = await listTokenNfts({
+          carbonTokenId: carbonId,
+          carbonSeriesId: selectedSeriesId,
+          cursor,
+          pageSize: NFT_PAGE_SIZE,
+          extended: true,
+        });
+        setSeriesNfts(res.items);
+        setNftNextCursor(res.nextCursor);
+        if (opts?.reset) {
+          setNftCursorHistory([cursor]);
+          setNftPageIndex(0);
+        } else if (opts?.pageIndex !== undefined) {
+          const pageIndex = opts.pageIndex;
+          setNftPageIndex(pageIndex);
+          if (!opts.preserveHistory) {
+            setNftCursorHistory((prev) => {
+              const next = prev.slice(0, pageIndex + 1);
+              next[pageIndex] = cursor;
+              return next;
+            });
+          }
+        }
+        addLog("[mint] Loaded series NFTs", {
+          cursor,
+          count: res.items.length,
+          nextCursor: res.nextCursor,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setSeriesNfts([]);
+        setNftNextCursor(null);
+        setNftError(message);
+        addLog("[error] Failed to load NFTs for series", { error: message });
+      } finally {
+        setNftLoading(false);
+      }
+    },
+    [selectedSeriesId, carbonId, addLog],
+  );
+
   useEffect(() => {
     setRomSchema(null);
     setRomFields([]);
@@ -206,11 +276,12 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     setMintedAddresses(null);
     setPhantasmaNftId(null);
     resetInputs();
+    resetNftListing();
 
     if (selectedToken?.symbol && isNft) {
       void loadTokenDetails();
     }
-  }, [selectedToken?.symbol, isNft, loadTokenDetails, resetInputs]);
+  }, [selectedToken?.symbol, isNft, loadTokenDetails, resetInputs, resetNftListing]);
 
   useEffect(() => {
     if (selectedToken?.symbol && isNft && carbonId != null) {
@@ -220,6 +291,13 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       setSelectedSeriesId(null);
     }
   }, [selectedToken?.symbol, isNft, carbonId, loadSeries]);
+
+  useEffect(() => {
+    resetNftListing();
+    if (carbonId != null && selectedSeriesId != null) {
+      void loadSeriesNfts("", { reset: true });
+    }
+  }, [carbonId, selectedSeriesId, loadSeriesNfts, resetNftListing]);
 
   const visibleStandard = useMemo(() => {
     const has = (field: string) => romFields.some((f) => f.name === field);
@@ -378,6 +456,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         phantasmaNftId: res.phantasmaNftId,
         carbonNftAddresses: res.carbonNftAddresses,
       });
+      await loadSeriesNfts("", { reset: true });
       resetInputs();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -401,7 +480,19 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     extraValues,
     addLog,
     resetInputs,
+    loadSeriesNfts,
   ]);
+
+  const handleNextNftPage = useCallback(() => {
+    if (!nftNextCursor) return;
+    void loadSeriesNfts(nftNextCursor, { pageIndex: nftPageIndex + 1 });
+  }, [nftNextCursor, nftPageIndex, loadSeriesNfts]);
+
+  const handlePrevNftPage = useCallback(() => {
+    if (nftPageIndex === 0) return;
+    const prevCursor = nftCursorHistory[nftPageIndex - 1] ?? "";
+    void loadSeriesNfts(prevCursor, { pageIndex: nftPageIndex - 1, preserveHistory: true });
+  }, [nftPageIndex, nftCursorHistory, loadSeriesNfts]);
 
   if (!selectedToken) {
     return (
@@ -722,6 +813,50 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                       </Button>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-foreground">Existing NFTs in series</div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handlePrevNftPage}
+                    disabled={nftPageIndex === 0 || nftLoading}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-[3rem] text-center text-xs text-muted-foreground">
+                    Page {nftPageIndex + 1}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleNextNftPage}
+                    disabled={!nftNextCursor || nftLoading}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              {nftLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading NFTs…
+                </div>
+              ) : nftError ? (
+                <div className="text-sm text-destructive">{nftError}</div>
+              ) : seriesNfts.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No NFTs minted in this series yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {seriesNfts.map((nft) => (
+                    <NftPreviewCard key={`${nft.carbonNftAddress}-${nft.ID}`} nft={nft} />
+                  ))}
                 </div>
               )}
             </div>

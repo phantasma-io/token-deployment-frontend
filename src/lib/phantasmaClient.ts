@@ -13,4 +13,9 @@ export {
   type TokenSeriesListItem,
 } from "./phantasma/series";
 export { mintNft, type MintNftParams, type MintNftResult } from "./phantasma/mint";
+export {
+  listTokenNfts,
+  type ListTokenNftsParams,
+  type ListTokenNftsResult,
+} from "./phantasma/nfts";
 // No other exports here on purpose, prefer importing from above modules if needed.
