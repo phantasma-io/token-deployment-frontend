@@ -4,10 +4,14 @@ import { useMemo } from "react";
 import type { NFT } from "phantasma-sdk-ts";
 
 import { cn } from "@/lib/utils";
+import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 
 type NftPreviewCardProps = {
   nft: NFT;
   className?: string;
+  selected?: boolean;
+  onSelect?: () => void;
+  disabled?: boolean;
 };
 
 type MetadataMap = Record<string, string>;
@@ -32,10 +36,17 @@ function truncateText(value: string, limit: number) {
   return `${value.slice(0, limit - 1)}…`;
 }
 
-export function NftPreviewCard({ nft, className }: NftPreviewCardProps) {
+export function NftPreviewCard({ nft, className, selected = false, onSelect, disabled }: NftPreviewCardProps) {
   const metadata = useMemo(() => toMetadataMap(nft.properties), [nft.properties]);
+  const nftId = getNftId(nft);
+  const displayNftId = nftId ? truncateMiddle(nftId, 44, 12) : "";
 
-  const name = metadata.name?.trim() || `NFT #${nft.ID}`;
+  const metadataName = metadata.name?.trim();
+  const name = metadataName && metadataName.length > 0
+    ? truncateMiddle(metadataName, 48, 12)
+    : nftId
+      ? `NFT #${truncateMiddle(nftId, 32, 10)}`
+      : "NFT";
   const description = metadata.description?.trim() || "";
   const imageCandidate = metadata.imageURL || metadata.image || metadata.icon || "";
   const imageUrl =
@@ -50,8 +61,31 @@ export function NftPreviewCard({ nft, className }: NftPreviewCardProps) {
       ? `${nft.ownerAddress.slice(0, 6)}…${nft.ownerAddress.slice(-4)}`
       : nft.ownerAddress || "";
 
+  const interactive = typeof onSelect === "function";
+  const Wrapper: any = interactive ? "button" : "div";
+  const wrapperProps = interactive
+    ? {
+        type: "button",
+        onClick: () => {
+          if (!disabled) {
+            onSelect?.();
+          }
+        },
+        disabled,
+        "aria-pressed": selected,
+      }
+    : {};
+
   return (
-    <div className={cn("flex items-center gap-3 rounded border bg-card p-3", className)}>
+    <Wrapper
+      {...wrapperProps}
+      className={cn(
+        "flex w-full items-center gap-3 rounded border bg-card p-3 text-left",
+        interactive && "transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed",
+        selected && "border-primary",
+        className,
+      )}
+    >
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -74,10 +108,10 @@ export function NftPreviewCard({ nft, className }: NftPreviewCardProps) {
           {shortDescription}
         </div>
         <div className="mt-1 flex flex-wrap gap-4 text-[11px] text-muted-foreground">
-          <span title={`Carbon NFT: ${nft.carbonNftAddress ?? "n/a"}`}>#{nft.ID}</span>
+          <span title={`Carbon NFT: ${nft.carbonNftAddress ?? "n/a"}`}>{displayNftId ? `#${displayNftId}` : "#?"}</span>
           {ownerShort && <span title={nft.ownerAddress}>Owner: {ownerShort}</span>}
         </div>
       </div>
-    </div>
+    </Wrapper>
   );
 }

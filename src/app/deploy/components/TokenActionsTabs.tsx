@@ -99,7 +99,7 @@ export function TokenActionsTabs({
       )}
 
       {activeTab === "infuse" && (
-        <TokenInfuseTab selectedToken={selectedToken} />
+        <TokenInfuseTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
       )}
 
       {activeTab === "burn" && <TokenBurnTab selectedToken={selectedToken} />}

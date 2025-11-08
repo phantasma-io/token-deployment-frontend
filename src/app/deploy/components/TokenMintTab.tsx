@@ -25,6 +25,7 @@ import { Loader2, Sparkles, CheckCircle2, XCircle, ChevronDown, ChevronLeft, Che
 import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
+import { getNftId } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import type { AddLogFn } from "../types";
 import {
@@ -134,12 +135,12 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     try {
       const token = await getTokenExtended(selectedToken.symbol);
       const schemas = token.tokenSchemas ?? null;
-      const cId = token.carbonId ?? null;
-      if (cId == null) {
+      const rawCarbonId = token.carbonId;
+      if (typeof rawCarbonId !== "string" || !rawCarbonId.trim()) {
         addLog("[error] RPC response missing carbonId", { token: selectedToken.symbol });
         throw new Error("Carbon token id not available from RPC");
       }
-      setCarbonId(BigInt(cId));
+      setCarbonId(BigInt(rawCarbonId.trim()));
 
       const romResult: VmStructSchemaResult | undefined = schemas?.rom;
       if (!romResult) {
@@ -171,7 +172,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
 
       addLog("[mint] Loaded token ROM schema", {
         symbol: selectedToken.symbol,
-        carbonId: String(cId),
+        carbonId: rawCarbonId,
         fieldCount: schemaFields.length,
       });
     } catch (err: unknown) {
@@ -855,7 +856,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               ) : (
                 <div className="space-y-2">
                   {seriesNfts.map((nft) => (
-                    <NftPreviewCard key={`${nft.carbonNftAddress}-${nft.ID}`} nft={nft} />
+                    <NftPreviewCard key={`${nft.carbonNftAddress}-${getNftId(nft)}`} nft={nft} />
                   ))}
                 </div>
               )}

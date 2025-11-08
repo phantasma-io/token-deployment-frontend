@@ -84,12 +84,12 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     try {
       const t: Token = await getTokenExtended(selectedToken.symbol);
       const tokenSchemas = t.tokenSchemas ?? null;
-      const cId = t.carbonId ?? null;
-      if (cId == null) {
+      const rawCarbonId = t.carbonId;
+      if (typeof rawCarbonId !== "string" || !rawCarbonId.trim()) {
         addLog("[error] RPC response missing carbonId", { token: t });
         throw new Error("Carbon token id not available from RPC");
       }
-      setCarbonId(BigInt(cId));
+      setCarbonId(BigInt(rawCarbonId.trim()));
 
       const rpcSeries: VmStructSchemaResult | undefined = tokenSchemas?.seriesMetadata;
       if (!rpcSeries) {
@@ -116,7 +116,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
         initial[k] = "";
       }
       setExtraValues(initial);
-      addLog("[series] Loaded token schemas and carbon id", { symbol: selectedToken.symbol, carbonId: String(cId) });
+      addLog("[series] Loaded token schemas and carbon id", { symbol: selectedToken.symbol, carbonId: rawCarbonId });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);

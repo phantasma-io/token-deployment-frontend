@@ -29,6 +29,43 @@ export type TokenSeriesListItem = {
 
 const MAX_SERIES_PAGE_LOOPS = 10;
 
+export function mapTokenSeriesResult(entry: TokenSeriesResult, fallbackCarbonTokenId: bigint): TokenSeriesListItem | null {
+  if (!entry) return null;
+  const meta: Record<string, string> = {};
+  if (Array.isArray(entry.metadata)) {
+    for (const prop of entry.metadata) {
+      if (prop?.key) {
+        meta[String(prop.key)] = String(prop.value ?? "");
+      }
+    }
+  }
+
+  let tokenIdForEntry = fallbackCarbonTokenId;
+  if (entry?.carbonTokenId) {
+    try {
+      tokenIdForEntry = BigInt(entry.carbonTokenId);
+    } catch {
+      tokenIdForEntry = fallbackCarbonTokenId;
+    }
+  }
+
+  let seriesIdValue: number | null = null;
+  if (entry?.carbonSeriesId !== undefined && entry?.carbonSeriesId !== null) {
+    const parsed = Number(entry.carbonSeriesId);
+    if (!Number.isNaN(parsed)) {
+      seriesIdValue = parsed;
+    }
+  }
+  if (seriesIdValue === null) return null;
+
+  return {
+    carbonTokenId: tokenIdForEntry,
+    carbonSeriesId: seriesIdValue,
+    seriesId: entry.seriesId,
+    metadata: meta,
+  };
+}
+
 export async function listTokenSeries(
   symbol: string,
   carbonTokenId: bigint | number,
@@ -61,36 +98,10 @@ export async function listTokenSeries(
           : [];
 
       for (const entry of items) {
-        const meta: Record<string, string> = {};
-        if (Array.isArray(entry.metadata)) {
-          for (const prop of entry.metadata) {
-            if (prop?.key) {
-              meta[String(prop.key)] = String(prop.value ?? "");
-            }
-          }
+        const mapped = mapTokenSeriesResult(entry, normalizedTokenId);
+        if (mapped) {
+          collected.push(mapped);
         }
-        let tokenIdForEntry = normalizedTokenId;
-        let seriesIdValue: number | null = null;
-        if (entry?.carbonTokenId) {
-          try {
-            tokenIdForEntry = BigInt(entry.carbonTokenId);
-          } catch {
-            tokenIdForEntry = normalizedTokenId;
-          }
-        }
-        if (entry?.carbonSeriesId !== undefined && entry?.carbonSeriesId !== null) {
-          const parsed = Number(entry.carbonSeriesId);
-          if (!Number.isNaN(parsed)) {
-            seriesIdValue = parsed;
-          }
-        }
-        if (seriesIdValue === null) continue;
-        collected.push({
-          carbonTokenId: tokenIdForEntry,
-          carbonSeriesId: seriesIdValue,
-          seriesId: entry.seriesId,
-          metadata: meta,
-        });
       }
 
       if (!page?.cursor) {
