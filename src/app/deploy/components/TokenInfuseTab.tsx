@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { EasyConnect, NFT, Token } from "phantasma-sdk-ts";
-import { Loader2, Sparkles, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { EasyConnect, NFT, Token, FeeOptions, TokenHelper, hexToBytes } from "phantasma-sdk-ts";
+import { Loader2, Sparkles, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   listAccountOwnedSeries,
   listAccountNfts,
   type TokenSeriesListItem,
+  infuseNfts,
 } from "@/lib/phantasmaClient";
 import { NftPreviewCard } from "./NftPreviewCard";
 
@@ -38,7 +39,47 @@ type TokenInfuseTabProps = {
   addLog: AddLogFn;
 };
 
-const NFT_PAGE_SIZE = 10;
+const NFT_PAGE_SIZE = 3;
+
+type InfusionQueueItem = { nft: NFT; instanceId: bigint; carbonNftAddress: string };
+
+const INFUSE_FEES_DEFAULTS = {
+  gasFeeBase: "10000",
+  feeMultiplier: "1000",
+  maxDataLimit: "1000",
+};
+
+function parseBigIntInput(raw: string, label: string, opts?: { allowEmpty?: boolean; defaultValue?: bigint }) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    if (opts?.allowEmpty) {
+      return opts.defaultValue ?? 0n;
+    }
+    throw new Error(`${label} is required`);
+  }
+  let value: bigint;
+  try {
+    value = BigInt(trimmed);
+  } catch {
+    throw new Error(`${label} must be a valid integer`);
+  }
+  if (value < 0n) {
+    throw new Error(`${label} must be non-negative`);
+  }
+  return value;
+}
+
+function extractCarbonNftInfo(address: string) {
+  const trimmed = address.trim();
+  if (!trimmed) {
+    throw new Error("Carbon NFT address is required");
+  }
+  const bytes = hexToBytes(trimmed);
+  if (bytes.length !== 32) {
+    throw new Error("Carbon NFT address must be 32 bytes");
+  }
+  return TokenHelper.unpackNftAddress(bytes);
+}
 
 export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTabProps) {
   const [loadingToken, setLoadingToken] = useState(false);
@@ -75,7 +116,14 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
   const [ownedNftNextCursor, setOwnedNftNextCursor] = useState<string | null>(null);
   const [ownedNftCursorHistory, setOwnedNftCursorHistory] = useState<string[]>([""]);
   const [ownedNftPageIndex, setOwnedNftPageIndex] = useState(0);
-  const [selectedOwnedNft, setSelectedOwnedNft] = useState<NFT | null>(null);
+  const [infusionQueue, setInfusionQueue] = useState<InfusionQueueItem[]>([]);
+  const [infusing, setInfusing] = useState(false);
+  const [infusionError, setInfusionError] = useState<string | null>(null);
+  const [infusionTxHash, setInfusionTxHash] = useState<string | null>(null);
+  const [feesExpanded, setFeesExpanded] = useState(false);
+  const [gasFeeBase, setGasFeeBase] = useState<string>(INFUSE_FEES_DEFAULTS.gasFeeBase);
+  const [feeMultiplier, setFeeMultiplier] = useState<string>(INFUSE_FEES_DEFAULTS.feeMultiplier);
+  const [maxDataLimit, setMaxDataLimit] = useState<string>(INFUSE_FEES_DEFAULTS.maxDataLimit);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
 
@@ -99,7 +147,6 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     setOwnedNftNextCursor(null);
     setOwnedNftCursorHistory([""]);
     setOwnedNftPageIndex(0);
-    setSelectedOwnedNft(null);
   }, []);
 
   const loadTokenDetails = useCallback(async () => {
@@ -283,10 +330,21 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     setCarbonId(null);
     resetSeriesNftListing();
     setTokenError(null);
+    setInfusionQueue([]);
+    setInfusionError(null);
+    setInfusionTxHash(null);
+    setInfusing(false);
     if (selectedToken?.symbol && isNft) {
       void loadTokenDetails();
     }
   }, [selectedToken?.symbol, isNft, loadTokenDetails, resetSeriesNftListing]);
+
+  const targetCarbonAddress = selectedTargetNft?.carbonNftAddress ?? "";
+
+  useEffect(() => {
+    if (!targetCarbonAddress) return;
+    setInfusionQueue((prev) => prev.filter((item) => item.carbonNftAddress !== targetCarbonAddress));
+  }, [targetCarbonAddress]);
 
   useEffect(() => {
     if (selectedToken?.symbol && isNft && carbonId != null) {
@@ -313,6 +371,9 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     setOwnedSeriesError(null);
     setSelectedOwnedSeriesId(null);
     resetOwnedNftListing();
+    setInfusionQueue([]);
+    setInfusionError(null);
+    setInfusionTxHash(null);
     if (walletAddress) {
       void loadOwnedTokens();
     }
@@ -356,6 +417,124 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     void loadOwnedNfts(prevCursor, { pageIndex: ownedNftPageIndex - 1 });
   }, [ownedNftPageIndex, ownedNftCursorHistory, loadOwnedNfts]);
 
+  const handleAddToQueue = useCallback((nft: NFT) => {
+    const address = nft.carbonNftAddress;
+    if (!address) return;
+    if (targetCarbonAddress && address === targetCarbonAddress) return;
+    let instanceId: bigint;
+    try {
+      const { instanceId: parsedInstanceId } = extractCarbonNftInfo(address);
+      instanceId = parsedInstanceId;
+    } catch (err) {
+      addLog("[error] Unable to parse NFT carbon address", {
+        error: (err as Error)?.message ?? String(err),
+        address,
+      });
+      return;
+    }
+    setInfusionQueue((prev) => {
+      if (prev.some((item) => item.carbonNftAddress === address)) return prev;
+      return [...prev, { nft, instanceId, carbonNftAddress: address }];
+    });
+  }, [addLog, targetCarbonAddress]);
+
+  const handleRemoveFromQueue = useCallback((address: string) => {
+    setInfusionQueue((prev) => prev.filter((item) => item.carbonNftAddress !== address));
+  }, []);
+
+  const handleClearQueue = useCallback(() => {
+    setInfusionQueue([]);
+  }, []);
+  const handleResetFees = useCallback(() => {
+    setGasFeeBase(INFUSE_FEES_DEFAULTS.gasFeeBase);
+    setFeeMultiplier(INFUSE_FEES_DEFAULTS.feeMultiplier);
+    setMaxDataLimit(INFUSE_FEES_DEFAULTS.maxDataLimit);
+  }, []);
+
+  const infuseDisabled = !targetCarbonAddress || infusionQueue.length === 0 || infusing;
+
+  const handleInfuse = useCallback(async () => {
+    if (!targetCarbonAddress) {
+      setInfusionError("Select target NFT to infuse into");
+      return;
+    }
+    if (infusionQueue.length === 0) {
+      setInfusionError("Add NFTs to the infusion queue");
+      return;
+    }
+    const walletConn = phaCtx?.conn;
+    if (!walletConn) {
+      const message = "Connect wallet before infusing";
+      setInfusionError(message);
+      addLog("[error] Wallet not connected for infusion", {});
+      return;
+    }
+    if (carbonId == null) {
+      const message = "Token carbon id is not available yet";
+      setInfusionError(message);
+      addLog("[error] Token carbon id missing for infusion", { symbol: selectedToken?.symbol });
+      return;
+    }
+    let gasFeeBaseValue: bigint;
+    let feeMultiplierValue: bigint;
+    let maxDataValue: bigint;
+    try {
+      gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+      feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+      maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", { allowEmpty: true, defaultValue: 0n });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setInfusionError(message);
+      addLog("[error] Invalid fee configuration for infusion", { error: message });
+      return;
+    }
+    const feeOptions = new FeeOptions(gasFeeBaseValue, feeMultiplierValue);
+    setInfusing(true);
+    setInfusionError(null);
+    setInfusionTxHash(null);
+    try {
+      const instanceIds = infusionQueue.map((item) => item.instanceId);
+      const res = await infuseNfts({
+        conn: walletConn,
+        carbonTokenId: carbonId,
+        targetCarbonAddress,
+        instanceIds,
+        feeOptions,
+        maxData: maxDataValue,
+      });
+      if (!res.success) {
+        throw new Error(res.error);
+      }
+      setInfusionTxHash(res.txHash);
+      addLog("[infuse] Submitted infusion transaction", {
+        txHash: res.txHash,
+        target: targetCarbonAddress,
+        count: instanceIds.length,
+      });
+      setInfusionQueue([]);
+      await loadSeriesNfts("", { reset: true });
+      await loadOwnedNfts("", { reset: true });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setInfusionError(message);
+      addLog("[error] Infusion transaction failed", { error: message });
+    } finally {
+      setInfusing(false);
+    }
+  }, [
+    phaCtx?.conn,
+    targetCarbonAddress,
+    carbonId,
+    infusionQueue,
+    gasFeeBase,
+    feeMultiplier,
+    maxDataLimit,
+    loadSeriesNfts,
+    loadOwnedNfts,
+    addLog,
+    selectedToken?.symbol,
+  ]);
+
   const ownedTokenOptionsDisplay = useMemo(() => {
     return ownedTokens.map((token) => {
       let tokenCarbonId: bigint | null = null;
@@ -366,6 +545,14 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
       return { symbol: token.symbol, label: getTokenPrimary(token, token.symbol), carbonId: tokenCarbonId };
     });
   }, [ownedTokens]);
+
+  const isFeesDefault = useMemo(() => {
+    return (
+      gasFeeBase.trim() === INFUSE_FEES_DEFAULTS.gasFeeBase &&
+      feeMultiplier.trim() === INFUSE_FEES_DEFAULTS.feeMultiplier &&
+      maxDataLimit.trim() === INFUSE_FEES_DEFAULTS.maxDataLimit
+    );
+  }, [gasFeeBase, feeMultiplier, maxDataLimit]);
 
   if (!selectedToken) {
     return (
@@ -533,7 +720,12 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
                     <div className="text-xs font-medium uppercase text-muted-foreground">Token filter</div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="outline" className="w-full justify-between">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={ownedTokensLoading}
+                        >
                           <span className="truncate">
                             {selectedOwnedTokenSymbol
                               ? selectedOwnedTokenSymbol
@@ -622,6 +814,9 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
                 {ownedTokensError && (
                   <div className="text-xs text-destructive">{ownedTokensError}</div>
                 )}
+                {ownedTokensLoading && (
+                  <div className="text-xs text-muted-foreground">Loading owned NFT tokens…</div>
+                )}
                 {ownedSeriesError && selectedOwnedTokenSymbol && (
                   <div className="text-xs text-destructive">{ownedSeriesError}</div>
                 )}
@@ -668,13 +863,6 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
               <div className="space-y-2">
                 {ownedNfts.map((nft, idx) => {
                   const nftId = getNftId(nft);
-                  const selectedId = getNftId(selectedOwnedNft);
-                  const isSelected =
-                    !!selectedOwnedNft &&
-                    !!nftId &&
-                    !!selectedId &&
-                    nftId === selectedId &&
-                    selectedOwnedNft.carbonNftAddress === nft.carbonNftAddress;
                   const isTarget = (() => {
                     const targetId = getNftId(selectedTargetNft);
                     return (
@@ -685,41 +873,178 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
                       selectedTargetNft.carbonNftAddress === nft.carbonNftAddress
                     );
                   })();
-
+                  const alreadyQueued = infusionQueue.some((item) => item.carbonNftAddress === nft.carbonNftAddress);
                   return (
-                    <NftPreviewCard
-                      key={`${nft.carbonNftAddress}-${nftId || idx}`}
-                      nft={nft}
-                      selected={isSelected}
-                      disabled={isTarget}
-                      onSelect={() => setSelectedOwnedNft(nft)}
-                    />
+                    <div key={`${nft.carbonNftAddress}-${nftId || idx}`} className="space-y-1">
+                      <NftPreviewCard
+                        nft={nft}
+                        disabled={isTarget || alreadyQueued}
+                        onSelect={() => handleAddToQueue(nft)}
+                      />
+                      <div className="text-[11px] text-muted-foreground">
+                        {isTarget
+                          ? "Cannot infuse target NFT"
+                          : alreadyQueued
+                            ? "Already in queue"
+                            : "Click to add into infusion queue"}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
             )}
-              {selectedOwnedNft && (
-                <div className="text-xs text-muted-foreground">
-                  Infusion NFT:
-                  <span className="ml-1 font-mono" title={getNftId(selectedOwnedNft) || undefined}>
-                    {getNftId(selectedOwnedNft)
-                      ? truncateMiddle(getNftId(selectedOwnedNft), 46, 12)
-                      : "—"}
-                  </span>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium text-foreground">NFTs to infuse</div>
+                {infusionQueue.length > 0 && (
+                  <Button type="button" size="sm" variant="outline" onClick={handleClearQueue}>
+                    Clear queue
+                  </Button>
+                )}
+              </div>
+              {infusionQueue.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Queue is empty.</div>
+              ) : (
+                <div className="space-y-2">
+                  {infusionQueue.map((item) => (
+                    <div key={item.carbonNftAddress} className="flex items-start gap-2 rounded border p-2">
+                      <div className="flex-1">
+                        <NftPreviewCard nft={item.nft} disabled />
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Instance ID:
+                          <span className="ml-1 font-mono">
+                            {truncateMiddle(item.instanceId.toString(), 46, 12)}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleRemoveFromQueue(item.carbonNftAddress)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
 
+              <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-left focus:outline-none"
+                    onClick={() => setFeesExpanded((prev) => !prev)}
+                    aria-expanded={feesExpanded}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className={`h-4 w-4 transition-transform ${feesExpanded ? "rotate-180" : ""}`}
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M12 15.75a.75.75 0 0 1-.53-.22l-5-5a.75.75 0 1 1 1.06-1.06L12 13.94l4.47-4.47a.75.75 0 0 1 1.06 1.06l-5 5a.75.75 0 0 1-.53.22z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      Fees &amp; limits
+                    </h3>
+                    {isFeesDefault && (
+                      <span className="text-xs text-emerald-600 ml-2">Using default fees and limits</span>
+                    )}
+                  </button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs"
+                    onClick={handleResetFees}
+                    disabled={isFeesDefault}
+                  >
+                    Reset
+                  </Button>
+                </div>
+                {feesExpanded ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Adjust Carbon gas fees, payload allowance, and expiry window for this infusion transaction.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Gas fee base</label>
+                        <input
+                          className="w-full rounded border px-2 py-1 font-mono"
+                          inputMode="numeric"
+                          value={gasFeeBase}
+                          onChange={(e) => setGasFeeBase(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Fee multiplier</label>
+                        <input
+                          className="w-full rounded border px-2 py-1 font-mono"
+                          inputMode="numeric"
+                          value={feeMultiplier}
+                          onChange={(e) => setFeeMultiplier(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Max data (bytes)</label>
+                        <input
+                          className="w-full rounded border px-2 py-1 font-mono"
+                          inputMode="numeric"
+                          value={maxDataLimit}
+                          onChange={(e) => setMaxDataLimit(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
               <div className="flex items-center gap-2 pt-2">
-                <Button type="button" disabled className="cursor-not-allowed opacity-60">
-                  <Sparkles className="mr-2 h-4 w-4" /> Infuse
+                <Button type="button" onClick={handleInfuse} disabled={infuseDisabled}>
+                  {infusing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Infusing…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" /> Infuse
+                    </>
+                  )}
                 </Button>
                 {!selectedTargetNft && (
                   <span className="text-xs text-muted-foreground">Select target NFT first</span>
                 )}
-                {!selectedOwnedNft && selectedTargetNft && (
-                  <span className="text-xs text-muted-foreground">Select NFT to infuse</span>
+                {selectedTargetNft && infusionQueue.length === 0 && (
+                  <span className="text-xs text-muted-foreground">Add NFTs to the queue</span>
                 )}
               </div>
+
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <div className="font-medium text-foreground">Infusion status</div>
+                {infusing && (
+                  <div className="flex items-center gap-2 text-amber-500">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Waiting for transaction confirmation…
+                  </div>
+                )}
+                {!infusing && infusionTxHash && (
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    Transaction confirmed
+                    <span className="font-mono text-xs break-all">{infusionTxHash}</span>
+                  </div>
+                )}
+                {!infusing && infusionError && (
+                  <div className="text-destructive">Infusion failed: {infusionError}</div>
+                )}
+              </div>
+            </div>
             </div>
           </>
         )}

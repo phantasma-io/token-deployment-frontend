@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { Copy, Check } from "lucide-react";
 import type { NFT } from "phantasma-sdk-ts";
 
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export function NftPreviewCard({ nft, className, selected = false, onSelect, dis
   const metadata = useMemo(() => toMetadataMap(nft.properties), [nft.properties]);
   const nftId = getNftId(nft);
   const displayNftId = nftId ? truncateMiddle(nftId, 44, 12) : "";
+  const infusionCount = Array.isArray(nft.infusion) ? nft.infusion.length : 0;
 
   const metadataName = metadata.name?.trim();
   const name = metadataName && metadataName.length > 0
@@ -61,31 +63,30 @@ export function NftPreviewCard({ nft, className, selected = false, onSelect, dis
       ? `${nft.ownerAddress.slice(0, 6)}…${nft.ownerAddress.slice(-4)}`
       : nft.ownerAddress || "";
 
-  const interactive = typeof onSelect === "function";
-  const Wrapper: any = interactive ? "button" : "div";
-  const wrapperProps = interactive
-    ? {
-        type: "button",
-        onClick: () => {
-          if (!disabled) {
-            onSelect?.();
-          }
-        },
-        disabled,
-        "aria-pressed": selected,
-      }
-    : {};
+  const [copied, setCopied] = useState(false);
 
-  return (
-    <Wrapper
-      {...wrapperProps}
-      className={cn(
-        "flex w-full items-center gap-3 rounded border bg-card p-3 text-left",
-        interactive && "transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed",
-        selected && "border-primary",
-        className,
-      )}
-    >
+  useEffect(() => {
+    if (!copied) return;
+    const handle = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(handle);
+  }, [copied]);
+
+  const handleCopy = useCallback(async () => {
+    if (!nftId) return;
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(nftId);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }, [nftId]);
+  const interactive = typeof onSelect === "function";
+
+  const cardBody = (
+    <>
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded bg-muted">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -108,10 +109,66 @@ export function NftPreviewCard({ nft, className, selected = false, onSelect, dis
           {shortDescription}
         </div>
         <div className="mt-1 flex flex-wrap gap-4 text-[11px] text-muted-foreground">
-          <span title={`Carbon NFT: ${nft.carbonNftAddress ?? "n/a"}`}>{displayNftId ? `#${displayNftId}` : "#?"}</span>
+          <div className="flex items-center gap-1">
+            <span title={`Carbon NFT: ${nft.carbonNftAddress ?? "n/a"}`}>
+              {displayNftId ? `#${displayNftId}` : "#?"}
+            </span>
+            {nftId && (
+              <button
+                type="button"
+                className="inline-flex items-center rounded border border-transparent bg-transparent p-0.5 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleCopy();
+                }}
+                title={copied ? "Copied!" : "Copy phantasma NFT ID"}
+              >
+                {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              </button>
+            )}
+          </div>
           {ownerShort && <span title={nft.ownerAddress}>Owner: {ownerShort}</span>}
+          {infusionCount > 0 && (
+            <span className="text-emerald-600" title={`This NFT has ${infusionCount} infused NFTs`}>
+              Infused: {infusionCount}
+            </span>
+          )}
         </div>
       </div>
-    </Wrapper>
+    </>
+  );
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (!disabled) {
+            onSelect?.();
+          }
+        }}
+        disabled={disabled}
+        aria-pressed={selected}
+        className={cn(
+          "flex w-full items-center gap-3 rounded border bg-card p-3 text-left transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed",
+          selected && "border-primary",
+          className,
+        )}
+      >
+        {cardBody}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex w-full items-center gap-3 rounded border bg-card p-3 text-left",
+        selected && "border-primary",
+        className,
+      )}
+    >
+      {cardBody}
+    </div>
   );
 }
