@@ -532,6 +532,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     symbolValidation,
     tokenUrl,
     walletAddress,
+    tokenSchemasJson,
   ]);
 
   return (
