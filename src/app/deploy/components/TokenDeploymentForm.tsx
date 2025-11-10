@@ -633,7 +633,8 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
             <label className="block text-sm font-medium">
               Icon <span className="text-red-500">*</span>
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-muted transition">
                 <Upload size={16} />
                 <span>Choose file</span>
@@ -706,6 +707,19 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 >
                   Remove
                 </Button>
+              )}
+              </div>
+              {iconDataUri && (
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Preview</div>
+                  <div className="flex h-32 items-center justify-center rounded border bg-muted/30 p-2">
+                    <img
+                      src={iconDataUri}
+                      alt="Token icon preview"
+                      className="max-h-28 object-contain"
+                    />
+                  </div>
+                </div>
               )}
             </div>
             <div className="space-y-2">

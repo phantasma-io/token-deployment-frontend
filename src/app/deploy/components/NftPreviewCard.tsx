@@ -6,6 +6,7 @@ import type { NFT } from "phantasma-sdk-ts";
 
 import { cn } from "@/lib/utils";
 import { getNftId, truncateMiddle } from "../utils/nftHelpers";
+import { normalizeImageUrl } from "../utils/urlHelpers";
 
 type NftPreviewCardProps = {
   nft: NFT;
@@ -51,10 +52,7 @@ export function NftPreviewCard({ nft, className, selected = false, onSelect, dis
       : "NFT";
   const description = metadata.description?.trim() || "";
   const imageCandidate = metadata.imageURL || metadata.image || metadata.icon || "";
-  const imageUrl =
-    imageCandidate && !/^https?:\/\//i.test(imageCandidate)
-      ? `https://${imageCandidate}`
-      : imageCandidate;
+  const imageUrl = useMemo(() => normalizeImageUrl(imageCandidate ?? ""), [imageCandidate]);
   const shortDescription =
     description.length > 0 ? truncateText(description, MAX_SUMMARY_LENGTH) : "No description";
 

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent } from "../utils/royalties";
+import { normalizeImageUrl } from "../utils/urlHelpers";
 import { formatVmTypeLabel } from "../utils/vmTypeLabel";
 
 import type { AddLogFn } from "../types";
@@ -41,6 +42,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const [imageURL, setImageURL] = useState("");
   const [infoURL, setInfoURL] = useState("");
   const [royaltiesPercent, setRoyaltiesPercent] = useState("");
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [romHex, setRomHex] = useState("0x"); // use 0x to indicate empty ROM by default
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +56,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const tokenPrimary = selectedToken
     ? getTokenPrimary(selectedToken, selectedToken.symbol)
     : "";
+  const imagePreviewUrl = useMemo(() => normalizeImageUrl(imageURL), [imageURL]);
 
   const isNft = isTokenNFT(selectedToken || undefined);
 
@@ -79,6 +82,10 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     setTxHash(null);
     setSeriesId(null);
   }, [resetInputs]);
+
+  useEffect(() => {
+    setImagePreviewError(false);
+  }, [imageURL]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -375,6 +382,24 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
                     onChange={(e) => setImageURL(e.target.value)}
                     required
                   />
+                  {imagePreviewUrl && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Preview</div>
+                      <div className="flex h-32 items-center justify-center rounded border bg-muted/30 p-2">
+                        {imagePreviewError ? (
+                          <span className="text-xs text-muted-foreground">Failed to load preview</span>
+                        ) : (
+                          <img
+                            src={imagePreviewUrl}
+                            alt="Series preview"
+                            className="max-h-28 object-contain"
+                            onError={() => setImagePreviewError(true)}
+                            onLoad={() => setImagePreviewError(false)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {visibleStandard.infoURL && (

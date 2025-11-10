@@ -28,6 +28,7 @@ import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent, type RoyaltiesConversion } from "../utils/royalties";
+import { normalizeImageUrl } from "../utils/urlHelpers";
 import { formatVmTypeLabel } from "../utils/vmTypeLabel";
 import type { AddLogFn } from "../types";
 import {
@@ -74,9 +75,11 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [imageURL, setImageURL] = useState("");
   const [infoURL, setInfoURL] = useState("");
   const [royaltiesPercent, setRoyaltiesPercent] = useState("");
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [romHex, setRomHex] = useState(DEFAULT_ROM_HEX);
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [ramValues, setRamValues] = useState<Record<string, string>>({});
+  const imagePreviewUrl = useMemo(() => normalizeImageUrl(imageURL), [imageURL]);
 
   const [submitting, setSubmitting] = useState(false);
   const [mintError, setMintError] = useState<string | null>(null);
@@ -139,6 +142,10 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     setPhantasmaNftId(null);
     resetNftListing();
   }, [resetInputs, resetNftListing]);
+
+  useEffect(() => {
+    setImagePreviewError(false);
+  }, [imageURL]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -716,6 +723,24 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                     onChange={(e) => setImageURL(e.target.value)}
                     required
                   />
+                  {imagePreviewUrl && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Preview</div>
+                      <div className="flex h-32 items-center justify-center rounded border bg-muted/30 p-2">
+                        {imagePreviewError ? (
+                          <span className="text-xs text-muted-foreground">Failed to load preview</span>
+                        ) : (
+                          <img
+                            src={imagePreviewUrl}
+                            alt="Token preview"
+                            className="max-h-28 object-contain"
+                            onError={() => setImagePreviewError(true)}
+                            onLoad={() => setImagePreviewError(false)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {visibleStandard.infoURL && (
