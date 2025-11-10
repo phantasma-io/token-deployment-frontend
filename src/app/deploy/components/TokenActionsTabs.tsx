@@ -16,14 +16,12 @@ import { TokenDeploymentForm, type TokenDeploymentFormHandle } from "./TokenDepl
 import { TokenSeriesTab } from "./TokenSeriesTab";
 import { TokenMintTab } from "./TokenMintTab";
 import { TokenInfuseTab } from "./TokenInfuseTab";
-import { TokenBurnTab } from "./TokenBurnTab";
 
 const tabs: Array<{ key: TokenActionTab; label: string }> = [
   { key: "deploy", label: "Deploy" },
   { key: "series", label: "Series" },
   { key: "mint", label: "Mint" },
   { key: "infuse", label: "Infuse" },
-  { key: "burn", label: "Burn" },
 ];
 
 type TokenActionsTabsProps = {
@@ -102,7 +100,6 @@ export function TokenActionsTabs({
         <TokenInfuseTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
       )}
 
-      {activeTab === "burn" && <TokenBurnTab selectedToken={selectedToken} />}
     </div>
   );
 }
