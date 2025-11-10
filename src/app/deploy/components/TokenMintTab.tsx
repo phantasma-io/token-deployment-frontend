@@ -368,6 +368,10 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const royaltiesConversion = useMemo(() => convertRoyaltiesPercent(royaltiesPercent), [royaltiesPercent]);
   const royaltiesBaseUnitsString =
     royaltiesConversion.kind === "ok" ? royaltiesConversion.baseUnits.toString() : "";
+  const royaltiesInvalid =
+    visibleStandard.royalties && royaltiesPercent.trim().length > 0 && royaltiesConversion.kind === "error";
+  const romHexInvalid =
+    visibleStandard.rom && romHex.trim().length > 0 && !isHexValueValid(romHex);
 
   const formValid = useMemo(() => {
     if (!canSign || !isNft || !selectedToken || !carbonId || !romSchema || !selectedSeriesId) {
@@ -690,7 +694,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {visibleStandard.name && (
                 <div className="space-y-1">
-                  <div className="text-xs font-medium">Name</div>
+                  <div className="text-xs font-medium">
+                    Name <span className="text-red-500">*</span>
+                  </div>
                   <input
                     className="w-full rounded border px-2 py-1"
                     value={name}
@@ -701,7 +707,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               )}
               {visibleStandard.imageURL && (
                 <div className="space-y-1">
-                  <div className="text-xs font-medium">Image URL</div>
+                  <div className="text-xs font-medium">
+                    Image URL <span className="text-red-500">*</span>
+                  </div>
                   <input
                     className="w-full rounded border px-2 py-1"
                     value={imageURL}
@@ -712,7 +720,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               )}
               {visibleStandard.infoURL && (
                 <div className="space-y-1">
-                  <div className="text-xs font-medium">Info URL</div>
+                  <div className="text-xs font-medium">
+                    Info URL <span className="text-red-500">*</span>
+                  </div>
                   <input
                     className="w-full rounded border px-2 py-1"
                     value={infoURL}
@@ -724,11 +734,13 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               {visibleStandard.royalties && (
                 <div className="space-y-1">
                   <div className="text-xs font-medium flex items-center justify-between gap-2">
-                    <span>Royalties (%)</span>
+                    <span>
+                      Royalties (%) <span className="text-red-500">*</span>
+                    </span>
                     <span className="text-[10px] text-muted-foreground">1% = 10,000,000 base units</span>
                   </div>
                   <input
-                    className="w-full rounded border px-2 py-1"
+                    className={`w-full rounded border px-2 py-1${royaltiesInvalid ? " border-red-500 focus-visible:ring-red-500" : ""}`}
                     inputMode="decimal"
                     value={royaltiesPercent}
                     onChange={(e) => setRoyaltiesPercent(e.target.value)}
@@ -749,7 +761,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               )}
               {visibleStandard.description && (
                 <div className="space-y-1 sm:col-span-2">
-                  <div className="text-xs font-medium">Description</div>
+                  <div className="text-xs font-medium">
+                    Description <span className="text-red-500">*</span>
+                  </div>
                   <textarea
                     className="w-full rounded border px-2 py-1"
                     rows={3}
@@ -775,17 +789,23 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                 ) {
                   return null;
                 }
+                const rawValue = extraValues[key] ?? "";
+                const trimmedValue = rawValue.trim();
+                const fieldInvalid =
+                  trimmedValue.length > 0 && !isVmValueValid(field.type, trimmedValue);
                 return (
                       <div key={key} className="space-y-1">
                         <div className="text-xs font-medium flex items-center gap-2">
-                          <span>{key}</span>
+                          <span>
+                            {key} <span className="text-red-500">*</span>
+                          </span>
                           <span className="text-[10px] text-muted-foreground">
                             {formatVmTypeLabel(field.type)}
                           </span>
                         </div>
                     <input
-                      className="w-full rounded border px-2 py-1"
-                      value={extraValues[key] ?? ""}
+                      className={`w-full rounded border px-2 py-1${fieldInvalid ? " border-red-500 focus-visible:ring-red-500" : ""}`}
+                      value={rawValue}
                       onChange={(e) =>
                         setExtraValues((prev) => ({
                           ...prev,
@@ -803,7 +823,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                     ROM (hex) <span className="text-muted-foreground">— use 0x for empty</span>
                   </div>
                   <input
-                    className="w-full rounded border px-2 py-1 font-mono"
+                    className={`w-full rounded border px-2 py-1 font-mono${romHexInvalid ? " border-red-500 focus-visible:ring-red-500" : ""}`}
                     value={romHex}
                     onChange={(e) => setRomHex(e.target.value)}
                     placeholder="0x…"
@@ -824,17 +844,23 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                     if (!key) {
                       return null;
                     }
+                    const rawValue = ramValues[key] ?? "";
+                    const trimmedValue = rawValue.trim();
+                    const fieldInvalid =
+                      trimmedValue.length > 0 && !isVmValueValid(field.type, trimmedValue);
                     return (
                       <div key={key} className="space-y-1">
                         <div className="text-xs font-medium flex items-center gap-2">
-                          <span>{key}</span>
+                          <span>
+                            {key} <span className="text-red-500">*</span>
+                          </span>
                           <span className="text-[10px] text-muted-foreground">
                             {formatVmTypeLabel(field.type)}
                           </span>
                         </div>
                         <input
-                          className="w-full rounded border px-2 py-1"
-                          value={ramValues[key] ?? ""}
+                          className={`w-full rounded border px-2 py-1${fieldInvalid ? " border-red-500 focus-visible:ring-red-500" : ""}`}
+                          value={rawValue}
                           onChange={(e) =>
                             setRamValues((prev) => ({
                               ...prev,
