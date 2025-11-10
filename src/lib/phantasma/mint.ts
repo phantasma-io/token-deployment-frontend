@@ -1,11 +1,14 @@
 import {
   Bytes32,
+  CarbonBinaryWriter,
   EasyConnect,
   MintNftFeeOptions,
   MintNonFungibleTxHelper,
   MetadataField,
   NftRomBuilder,
   TransactionData,
+  VmDynamicStruct,
+  VmNamedDynamicVariable,
   VmStructSchema,
   VmType,
   getRandomPhantasmaId,
@@ -24,6 +27,8 @@ export type MintNftParams = {
   romSchema: VmStructSchema;
   metadataValues: Record<string, string>;
   romHex: string;
+  ramSchema?: VmStructSchema | null;
+  ramValues?: Record<string, string>;
   feeOptions?: MintNftFeeOptions;
   maxData?: bigint | number;
   expiry?: bigint | number | null;
@@ -48,6 +53,8 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
     romSchema,
     metadataValues,
     romHex,
+    ramSchema,
+    ramValues,
     feeOptions,
     maxData,
     expiry,
@@ -94,8 +101,41 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
     metadata.push({ name, value: parsedValue });
   }
 
+  let ramPayload = new Uint8Array();
+  const ramFieldNames: string[] = [];
+  if (ramSchema && Array.isArray(ramSchema.fields) && ramSchema.fields.length > 0) {
+    const writer = new CarbonBinaryWriter();
+    const ramStruct = new VmDynamicStruct();
+    ramStruct.fields = [];
+    const schemaFieldsRam = ramSchema.fields ?? [];
+    for (const field of schemaFieldsRam) {
+      const name = String(field?.name?.data ?? "");
+      if (!name) {
+        continue;
+      }
+      const providedValue = ramValues?.[name] ?? "";
+      const trimmed = providedValue.trim();
+      if (!trimmed) {
+        return { success: false, error: `RAM field '${name}' is required` };
+      }
+      const vmType = field?.schema?.type as VmType;
+      let parsedValue: string | number | bigint | Uint8Array;
+      try {
+        parsedValue = parseVmMetadataValue(vmType, trimmed, name);
+      } catch (err: unknown) {
+        return { success: false, error: toMessage(err) };
+      }
+      ramStruct.fields.push(VmNamedDynamicVariable.from(field.name, vmType, parsedValue));
+      ramFieldNames.push(name);
+    }
+    ramStruct.writeWithSchema(ramSchema, writer);
+    // CarbonBinaryWriter returns a Uint8Array typed with ArrayBufferLike, so re-wrap to match Uint8Array<ArrayBuffer>
+    ramPayload = new Uint8Array(writer.toUint8Array());
+  }
+
   addLog?.("[mint] Prepared metadata payload", {
-    keys: metadata.map((f) => f.name),
+    rom_keys: metadata.map((f) => f.name),
+    ram_keys: ramFieldNames,
   });
 
   const phantasmaNftId = await getRandomPhantasmaId();
@@ -125,7 +165,7 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
       senderPk,
       receiverPk,
       romPayload,
-      new Uint8Array(),
+      ramPayload,
       effectiveFee,
       normalizedMaxData,
       expiryValue,

@@ -59,6 +59,8 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [carbonId, setCarbonId] = useState<bigint | null>(null);
   const [romSchema, setRomSchema] = useState<VmStructSchema | null>(null);
   const [romFields, setRomFields] = useState<RomField[]>([]);
+  const [ramSchema, setRamSchema] = useState<VmStructSchema | null>(null);
+  const [ramFields, setRamFields] = useState<RomField[]>([]);
 
   const [seriesLoading, setSeriesLoading] = useState(false);
   const [seriesError, setSeriesError] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [royalties, setRoyalties] = useState("");
   const [romHex, setRomHex] = useState(DEFAULT_ROM_HEX);
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
+  const [ramValues, setRamValues] = useState<Record<string, string>>({});
 
   const [submitting, setSubmitting] = useState(false);
   const [mintError, setMintError] = useState<string | null>(null);
@@ -102,6 +105,13 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     setRoyalties("");
     setRomHex(DEFAULT_ROM_HEX);
     setExtraValues((prev) => {
+      const cleared: Record<string, string> = {};
+      for (const key of Object.keys(prev)) {
+        cleared[key] = "";
+      }
+      return cleared;
+    });
+    setRamValues((prev) => {
       const cleared: Record<string, string> = {};
       for (const key of Object.keys(prev)) {
         cleared[key] = "";
@@ -170,16 +180,43 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       }
       setExtraValues(initialExtras);
 
+      const ramResult: VmStructSchemaResult | undefined = schemas?.ram;
+      if (ramResult && Array.isArray(ramResult.fields) && ramResult.fields.length > 0) {
+        const parsedRamSchema = vmStructSchemaFromRpcResult(ramResult);
+        const ramSchemaFields = parsedRamSchema.fields ?? [];
+        const mappedRam: RomField[] = ramSchemaFields
+          .map((sf) => ({
+            name: String(sf.name?.data ?? ""),
+            type: sf.schema?.type as any,
+          }))
+          .filter((f) => !!f.name);
+        setRamSchema(ramSchemaFields.length > 0 ? parsedRamSchema : null);
+        setRamFields(mappedRam);
+        const initialRamValues: Record<string, string> = {};
+        mappedRam.forEach((f) => {
+          initialRamValues[f.name] = "";
+        });
+        setRamValues(initialRamValues);
+      } else {
+        setRamSchema(null);
+        setRamFields([]);
+        setRamValues({});
+      }
+
       addLog("[mint] Loaded token ROM schema", {
         symbol: selectedToken.symbol,
         carbonId: rawCarbonId,
         fieldCount: schemaFields.length,
+        ramFieldCount: ramResult?.fields?.length ?? 0,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setTokenError(message);
       setRomSchema(null);
       setRomFields([]);
+      setRamSchema(null);
+      setRamFields([]);
+      setRamValues({});
       setCarbonId(null);
       addLog("[error] Failed to load token ROM schema", { error: message });
     } finally {
@@ -267,6 +304,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   useEffect(() => {
     setRomSchema(null);
     setRomFields([]);
+    setRamSchema(null);
+    setRamFields([]);
+    setRamValues({});
     setCarbonId(null);
     setSeriesList([]);
     setSelectedSeriesId(null);
@@ -368,6 +408,19 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         return false;
       }
     }
+    const shouldValidateRam = ramSchema && ramFields.length > 0;
+    if (shouldValidateRam) {
+      for (const field of ramFields) {
+        const key = field.name;
+        if (!key) continue;
+        const raw = ramValues[key] ?? "";
+        const trimmed = raw.trim();
+        if (!trimmed) return false;
+        if (!isVmValueValid(field.type as VmType, trimmed)) {
+          return false;
+        }
+      }
+    }
     return true;
   }, [
     canSign,
@@ -385,6 +438,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     romHex,
     extraValues,
     schemaFieldMap,
+    ramSchema,
+    ramFields,
+    ramValues,
   ]);
 
   const handleMint = useCallback(async () => {
@@ -427,11 +483,22 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         metadata[key] = value;
       }
 
+      const shouldSendRam = !!(ramSchema && ramFields.length > 0);
+      const ramInputValues: Record<string, string> = {};
+      if (shouldSendRam && ramSchema?.fields) {
+        for (const field of ramSchema.fields) {
+          const key = String(field?.name?.data ?? "");
+          if (!key) continue;
+          ramInputValues[key] = (ramValues[key] ?? "").trim();
+        }
+      }
+
       addLog("[mint] Submitting mint request", {
         symbol: selectedToken.symbol,
         carbonTokenId: String(carbonId),
         seriesId: selectedSeriesId,
         metadataKeys: Object.keys(metadata),
+        ramKeys: shouldSendRam ? Object.keys(ramInputValues) : [],
       });
 
       const res = await mintNft({
@@ -441,6 +508,8 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         romSchema,
         metadataValues: metadata,
         romHex: romHex.trim(),
+        ramSchema: shouldSendRam ? ramSchema : null,
+        ramValues: shouldSendRam ? ramInputValues : undefined,
         maxData: DEFAULT_MAX_DATA,
         addLog,
       });
@@ -472,6 +541,8 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     carbonId,
     selectedSeriesId,
     romSchema,
+    ramSchema,
+    ramFields,
     romHex,
     name,
     description,
@@ -479,6 +550,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     infoURL,
     royalties,
     extraValues,
+    ramValues,
     addLog,
     resetInputs,
     loadSeriesNfts,
@@ -716,6 +788,41 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                 </div>
               )}
             </div>
+
+            {ramSchema && ramFields.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-dashed bg-muted/10 p-3">
+                <div className="text-xs font-medium uppercase text-muted-foreground">
+                  RAM metadata
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {ramFields.map((field) => {
+                    const key = field.name;
+                    if (!key) {
+                      return null;
+                    }
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="text-xs font-medium flex items-center gap-2">
+                          <span>{key}</span>
+                          <span className="text-[10px] text-muted-foreground">{String(field.type)}</span>
+                        </div>
+                        <input
+                          className="w-full rounded border px-2 py-1"
+                          value={ramValues[key] ?? ""}
+                          onChange={(e) =>
+                            setRamValues((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <Button
