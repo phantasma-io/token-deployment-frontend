@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent } from "../utils/royalties";
+import { formatVmTypeLabel } from "../utils/vmTypeLabel";
+
 import type { AddLogFn } from "../types";
 import { createSeries, getTokenExtended } from "@/lib/phantasmaClient";
 
@@ -24,7 +26,7 @@ type TokenSeriesTabProps = {
   addLog: AddLogFn;
 };
 
-type SeriesField = { name: string; type: string | number };
+type SeriesField = { name: string; type: VmType };
 
 export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTabProps) {
   const [loading, setLoading] = useState(false);
@@ -103,7 +105,10 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       const schemaFields = schema.fields ?? [];
       const defaultNames = new Set(seriesDefaultMetadataFields.map((f: any) => f.name));
       const mapped: SeriesField[] = schemaFields
-        .map((sf) => ({ name: String(sf.name?.data ?? ""), type: (sf.schema?.type as any) }))
+        .map((sf) => ({
+          name: String(sf.name?.data ?? ""),
+          type: sf.schema?.type as VmType,
+        }))
         .filter((f) => !!f.name)
         .filter((f) => !defaultNames.has(f.name) || f.name === "rom"); // don't render _i/mode; rom handled separately
 
@@ -423,7 +428,9 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
                   <div key={k} className="space-y-1">
                     <div className="text-xs font-medium flex items-center gap-2">
                       <span>{k}</span>
-                      <span className="text-[10px] text-muted-foreground">{String(f.type)}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {formatVmTypeLabel(f.type)}
+                      </span>
                     </div>
                     <input
                       className="w-full rounded border px-2 py-1"

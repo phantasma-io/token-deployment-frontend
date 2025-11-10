@@ -28,6 +28,7 @@ import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent, type RoyaltiesConversion } from "../utils/royalties";
+import { formatVmTypeLabel } from "../utils/vmTypeLabel";
 import type { AddLogFn } from "../types";
 import {
   getTokenExtended,
@@ -53,10 +54,6 @@ type RomField = { name: string; type: VmType };
 const DEFAULT_ROM_HEX = "0x";
 const DEFAULT_MAX_DATA = 100000000n;
 const NFT_PAGE_SIZE = 10;
-
-function formatVmTypeLabel(value: VmType): string {
-  return `${VmType[value as number]}`;
-}
 
 export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProps) {
   const [loadingToken, setLoadingToken] = useState(false);
