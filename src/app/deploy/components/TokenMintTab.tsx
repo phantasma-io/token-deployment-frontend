@@ -25,7 +25,7 @@ import { Loader2, Sparkles, CheckCircle2, XCircle, ChevronDown, ChevronLeft, Che
 import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
-import { getNftId } from "../utils/nftHelpers";
+import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import type { AddLogFn } from "../types";
 import {
@@ -757,7 +757,10 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                   </div>
                   {phantasmaNftId && (
                     <div className="text-xs">
-                      Phantasma NFT ID: <span className="font-mono">{phantasmaNftId}</span>
+                      Phantasma NFT ID:{" "}
+                      <span className="font-mono" title={phantasmaNftId}>
+                        {truncateMiddle(phantasmaNftId, 46, 12)}
+                      </span>
                     </div>
                   )}
                   {mintedAddresses && mintedAddresses.length > 0 && (
@@ -773,7 +776,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs break-all">{txHash}</span>
+                    <span className="font-mono text-xs break-all" title={txHash}>
+                      {truncateMiddle(txHash, 46, 12)}
+                    </span>
                     <Button
                       type="button"
                       size="sm"
@@ -798,7 +803,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                   </div>
                   {txHash && (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <span className="font-mono text-xs break-all">{txHash}</span>
+                      <span className="font-mono text-xs break-all" title={txHash}>
+                        {truncateMiddle(txHash, 46, 12)}
+                      </span>
                       <Button
                         type="button"
                         size="sm"
