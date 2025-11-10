@@ -47,11 +47,15 @@ type TokenMintTabProps = {
   addLog: AddLogFn;
 };
 
-type RomField = { name: string; type: string | number };
+type RomField = { name: string; type: VmType };
 
 const DEFAULT_ROM_HEX = "0x";
 const DEFAULT_MAX_DATA = 100000000n;
 const NFT_PAGE_SIZE = 10;
+
+function formatVmTypeLabel(value: VmType): string {
+  return `${VmType[value as number]}`;
+}
 
 export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProps) {
   const [loadingToken, setLoadingToken] = useState(false);
@@ -164,7 +168,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       const mapped: RomField[] = schemaFields
         .map((sf) => ({
           name: String(sf.name?.data ?? ""),
-          type: sf.schema?.type as any,
+          type: sf.schema?.type as VmType,
         }))
         .filter((f) => !!f.name)
         .filter((f) => !defaultNames.has(f.name) || f.name === "rom");
@@ -187,7 +191,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         const mappedRam: RomField[] = ramSchemaFields
           .map((sf) => ({
             name: String(sf.name?.data ?? ""),
-            type: sf.schema?.type as any,
+            type: sf.schema?.type as VmType,
           }))
           .filter((f) => !!f.name);
         setRamSchema(ramSchemaFields.length > 0 ? parsedRamSchema : null);
@@ -754,11 +758,13 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                   return null;
                 }
                 return (
-                  <div key={key} className="space-y-1">
-                    <div className="text-xs font-medium flex items-center gap-2">
-                      <span>{key}</span>
-                      <span className="text-[10px] text-muted-foreground">{String(field.type)}</span>
-                    </div>
+                      <div key={key} className="space-y-1">
+                        <div className="text-xs font-medium flex items-center gap-2">
+                          <span>{key}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatVmTypeLabel(field.type)}
+                          </span>
+                        </div>
                     <input
                       className="w-full rounded border px-2 py-1"
                       value={extraValues[key] ?? ""}
@@ -804,7 +810,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                       <div key={key} className="space-y-1">
                         <div className="text-xs font-medium flex items-center gap-2">
                           <span>{key}</span>
-                          <span className="text-[10px] text-muted-foreground">{String(field.type)}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatVmTypeLabel(field.type)}
+                          </span>
                         </div>
                         <input
                           className="w-full rounded border px-2 py-1"
