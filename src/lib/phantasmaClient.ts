@@ -26,5 +26,10 @@ export {
   listAccountNfts,
   type ListAccountNftsParams,
 } from "./phantasma/nfts";
-export { infuseNfts, type InfuseParams, type InfuseResult } from "./phantasma/infuse";
+export {
+  infuseNfts,
+  type InfuseParams,
+  type InfuseResult,
+  type InfuseInstanceGroup,
+} from "./phantasma/infuse";
 // No other exports here on purpose, prefer importing from above modules if needed.

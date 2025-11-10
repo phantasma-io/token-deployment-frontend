@@ -41,7 +41,12 @@ type TokenInfuseTabProps = {
 
 const NFT_PAGE_SIZE = 3;
 
-type InfusionQueueItem = { nft: NFT; instanceId: bigint; carbonNftAddress: string };
+type InfusionQueueItem = {
+  nft: NFT;
+  instanceId: bigint;
+  carbonTokenId: bigint;
+  carbonNftAddress: string;
+};
 
 const INFUSE_FEES_DEFAULTS = {
   gasFeeBase: "10000",
@@ -421,10 +426,9 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     const address = nft.carbonNftAddress;
     if (!address) return;
     if (targetCarbonAddress && address === targetCarbonAddress) return;
-    let instanceId: bigint;
+    let parsedInfo: ReturnType<typeof extractCarbonNftInfo>;
     try {
-      const { instanceId: parsedInstanceId } = extractCarbonNftInfo(address);
-      instanceId = parsedInstanceId;
+      parsedInfo = extractCarbonNftInfo(address);
     } catch (err) {
       addLog("[error] Unable to parse NFT carbon address", {
         error: (err as Error)?.message ?? String(err),
@@ -432,9 +436,10 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
       });
       return;
     }
+    const { instanceId, carbonTokenId } = parsedInfo;
     setInfusionQueue((prev) => {
       if (prev.some((item) => item.carbonNftAddress === address)) return prev;
-      return [...prev, { nft, instanceId, carbonNftAddress: address }];
+      return [...prev, { nft, instanceId, carbonTokenId, carbonNftAddress: address }];
     });
   }, [addLog, targetCarbonAddress]);
 
@@ -493,12 +498,25 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     setInfusionError(null);
     setInfusionTxHash(null);
     try {
-      const instanceIds = infusionQueue.map((item) => item.instanceId);
+      const groupedByToken = new Map<string, { carbonTokenId: bigint; instanceIds: bigint[] }>();
+      for (const item of infusionQueue) {
+        const key = item.carbonTokenId.toString();
+        const existing = groupedByToken.get(key);
+        if (existing) {
+          existing.instanceIds.push(item.instanceId);
+        } else {
+          groupedByToken.set(key, { carbonTokenId: item.carbonTokenId, instanceIds: [item.instanceId] });
+        }
+      }
+      const instanceGroups = Array.from(groupedByToken.values());
+      if (instanceGroups.length === 0) {
+        throw new Error("No NFTs selected for infusion");
+      }
+      const totalInstances = infusionQueue.length;
       const res = await infuseNfts({
         conn: walletConn,
-        carbonTokenId: carbonId,
         targetCarbonAddress,
-        instanceIds,
+        groups: instanceGroups,
         feeOptions,
         maxData: maxDataValue,
       });
@@ -509,7 +527,8 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
       addLog("[infuse] Submitted infusion transaction", {
         txHash: res.txHash,
         target: targetCarbonAddress,
-        count: instanceIds.length,
+        count: totalInstances,
+        token_groups: instanceGroups.length,
       });
       setInfusionQueue([]);
       await loadSeriesNfts("", { reset: true });
