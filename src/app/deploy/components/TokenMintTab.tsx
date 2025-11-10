@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
+import { convertRoyaltiesPercent, type RoyaltiesConversion } from "../utils/royalties";
 import type { AddLogFn } from "../types";
 import {
   getTokenExtended,
@@ -75,7 +76,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [description, setDescription] = useState("");
   const [imageURL, setImageURL] = useState("");
   const [infoURL, setInfoURL] = useState("");
-  const [royalties, setRoyalties] = useState("");
+  const [royaltiesPercent, setRoyaltiesPercent] = useState("");
   const [romHex, setRomHex] = useState(DEFAULT_ROM_HEX);
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [ramValues, setRamValues] = useState<Record<string, string>>({});
@@ -106,7 +107,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     setDescription("");
     setImageURL("");
     setInfoURL("");
-    setRoyalties("");
+    setRoyaltiesPercent("");
     setRomHex(DEFAULT_ROM_HEX);
     setExtraValues((prev) => {
       const cleared: Record<string, string> = {};
@@ -367,6 +368,10 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     return map;
   }, [romSchema]);
 
+  const royaltiesConversion = useMemo(() => convertRoyaltiesPercent(royaltiesPercent), [royaltiesPercent]);
+  const royaltiesBaseUnitsString =
+    royaltiesConversion.kind === "ok" ? royaltiesConversion.baseUnits.toString() : "";
+
   const formValid = useMemo(() => {
     if (!canSign || !isNft || !selectedToken || !carbonId || !romSchema || !selectedSeriesId) {
       return false;
@@ -375,7 +380,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     if (visibleStandard.description && !description.trim()) return false;
     if (visibleStandard.imageURL && !imageURL.trim()) return false;
     if (visibleStandard.infoURL && !infoURL.trim()) return false;
-    if (visibleStandard.royalties && !/^[-]?\d+$/.test(royalties.trim())) return false;
+    if (visibleStandard.royalties && royaltiesConversion.kind !== "ok") return false;
 
     if (visibleStandard.rom) {
       if (!isHexValueValid(romHex)) return false;
@@ -401,7 +406,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
           raw = infoURL;
           break;
         case "royalties":
-          raw = royalties;
+          raw = royaltiesBaseUnitsString;
           break;
         default:
           raw = extraValues[key] ?? "";
@@ -438,7 +443,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     description,
     imageURL,
     infoURL,
-    royalties,
+    royaltiesPercent,
+    royaltiesBaseUnitsString,
+    royaltiesConversion,
     romHex,
     extraValues,
     schemaFieldMap,
@@ -474,12 +481,12 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
           case "imageURL":
             value = imageURL.trim();
             break;
-          case "infoURL":
-            value = infoURL.trim();
-            break;
-          case "royalties":
-            value = royalties.trim();
-            break;
+        case "infoURL":
+          value = infoURL.trim();
+          break;
+        case "royalties":
+          value = royaltiesBaseUnitsString || "";
+          break;
           default:
             value = (extraValues[key] ?? "").trim();
             break;
@@ -552,7 +559,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     description,
     imageURL,
     infoURL,
-    royalties,
+    royaltiesBaseUnitsString,
     extraValues,
     ramValues,
     addLog,
@@ -719,14 +726,28 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
               )}
               {visibleStandard.royalties && (
                 <div className="space-y-1">
-                  <div className="text-xs font-medium">Royalties (Int32; 10000000 = 1%)</div>
+                  <div className="text-xs font-medium flex items-center justify-between gap-2">
+                    <span>Royalties (%)</span>
+                    <span className="text-[10px] text-muted-foreground">1% = 10,000,000 base units</span>
+                  </div>
                   <input
                     className="w-full rounded border px-2 py-1"
-                    inputMode="numeric"
-                    value={royalties}
-                    onChange={(e) => setRoyalties(e.target.value)}
+                    inputMode="decimal"
+                    value={royaltiesPercent}
+                    onChange={(e) => setRoyaltiesPercent(e.target.value)}
+                    placeholder="e.g. 2.5"
                     required
                   />
+                  {royaltiesConversion.kind === "error" ? (
+                    <p className="text-xs text-amber-500">{royaltiesConversion.message}</p>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Base units:</span>
+                      <span className="font-mono">
+                        {royaltiesConversion.kind === "ok" ? royaltiesBaseUnitsString : "—"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               {visibleStandard.description && (

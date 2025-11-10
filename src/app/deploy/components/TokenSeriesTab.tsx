@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
+import { convertRoyaltiesPercent } from "../utils/royalties";
 import type { AddLogFn } from "../types";
 import { createSeries, getTokenExtended } from "@/lib/phantasmaClient";
 
@@ -37,7 +38,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const [description, setDescription] = useState("");
   const [imageURL, setImageURL] = useState("");
   const [infoURL, setInfoURL] = useState("");
-  const [royalties, setRoyalties] = useState("");
+  const [royaltiesPercent, setRoyaltiesPercent] = useState("");
   const [romHex, setRomHex] = useState("0x"); // use 0x to indicate empty ROM by default
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -59,7 +60,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     setDescription("");
     setImageURL("");
     setInfoURL("");
-    setRoyalties("");
+    setRoyaltiesPercent("");
     setRomHex("0x");
     setExtraValues((prev) => {
       const cleared: Record<string, string> = {};
@@ -159,6 +160,10 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     return map;
   }, [seriesSchema]);
 
+  const royaltiesConversion = useMemo(() => convertRoyaltiesPercent(royaltiesPercent), [royaltiesPercent]);
+  const royaltiesBaseUnitsString =
+    royaltiesConversion.kind === "ok" ? royaltiesConversion.baseUnits.toString() : "";
+
   const formValid = useMemo(() => {
     if (!canSign || !isNft || !selectedToken || !carbonId || !seriesSchema) return false;
     // All fields from schema (excluding id/mode) are required
@@ -166,9 +171,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     if (visibleStandard.description && !description.trim()) return false;
     if (visibleStandard.imageURL && !imageURL.trim()) return false;
     if (visibleStandard.infoURL && !infoURL.trim()) return false;
-    if (visibleStandard.royalties) {
-      if (!/^[-]?\d+$/.test(royalties.trim())) return false;
-    }
+    if (visibleStandard.royalties && royaltiesConversion.kind !== "ok") return false;
     // All custom fields must be non-empty
     if (visibleStandard.rom && !isHexValueValid(romHex)) return false;
 
@@ -191,7 +194,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
           raw = infoURL;
           break;
         case "royalties":
-          raw = royalties;
+          raw = royaltiesBaseUnitsString;
           break;
         default:
           raw = extraValues[key] ?? "";
@@ -213,7 +216,8 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     description,
     imageURL,
     infoURL,
-    royalties,
+    royaltiesConversion,
+    royaltiesBaseUnitsString,
     romHex,
     extraValues,
     schemaFieldMap,
@@ -249,7 +253,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
           case 'description': v = description.trim(); break;
           case 'imageURL': v = imageURL.trim(); break;
           case 'infoURL': v = infoURL.trim(); break;
-          case 'royalties': v = royalties.trim(); break;
+          case 'royalties': v = royaltiesBaseUnitsString || ""; break;
           default:
             v = (extraValues[k] ?? '').trim();
             break;
@@ -287,7 +291,7 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     } finally {
       setSubmitting(false);
     }
-  }, [selectedToken?.symbol, carbonId, phaCtx?.conn, visibleStandard, name, description, imageURL, infoURL, royalties, romHex, addLog, seriesSchema, extraValues, resetInputs]);
+  }, [selectedToken?.symbol, carbonId, phaCtx?.conn, visibleStandard, name, description, imageURL, infoURL, royaltiesPercent, royaltiesBaseUnitsString, romHex, addLog, seriesSchema, extraValues, resetInputs]);
 
   if (!selectedToken) {
     return (
@@ -373,14 +377,28 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
               )}
               {visibleStandard.royalties && (
                 <div className="space-y-1">
-                  <div className="text-xs font-medium">Royalties (Int32; 10000000 = 1%)</div>
+                  <div className="text-xs font-medium flex items-center justify-between gap-2">
+                    <span>Royalties (%)</span>
+                    <span className="text-[10px] text-muted-foreground">1% = 10,000,000 base units</span>
+                  </div>
                   <input
                     className="w-full rounded border px-2 py-1"
-                    inputMode="numeric"
-                    value={royalties}
-                    onChange={(e) => setRoyalties(e.target.value)}
+                    inputMode="decimal"
+                    value={royaltiesPercent}
+                    onChange={(e) => setRoyaltiesPercent(e.target.value)}
+                    placeholder="e.g. 2.5"
                     required
                   />
+                  {royaltiesConversion.kind === "error" ? (
+                    <p className="text-xs text-amber-500">{royaltiesConversion.message}</p>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Base units:</span>
+                      <span className="font-mono">
+                        {royaltiesConversion.kind === "ok" ? royaltiesBaseUnitsString : "—"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               {visibleStandard.description && (
