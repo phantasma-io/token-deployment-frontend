@@ -11,7 +11,12 @@ import {
   XCircle,
   Info,
 } from "lucide-react";
-import { CreateTokenFeeOptions, TokenInfoBuilder, TokenSchemasBuilder } from "phantasma-sdk-ts";
+import {
+  CreateTokenFeeOptions,
+  TokenInfoBuilder,
+  TokenSchemasBuilder,
+  standardMetadataFields,
+} from "phantasma-sdk-ts";
 
 import { Button } from "@/components/ui/button";
 
@@ -103,6 +108,22 @@ const DEFAULT_FEES_AND_LIMITS = {
   gasFeeMultiplier: "10000",
   maxDataLimit: "1000000000",
 };
+
+const DEFAULT_NFT_SCHEMAS_JSON = JSON.stringify(
+  {
+    seriesMetadata: [],
+    rom: standardMetadataFields.map((field) => {
+      const name = String(field?.name ?? "");
+      return {
+        name,
+        type: name === "royalties" ? "Int32" : "String",
+      };
+    }),
+    ram: [],
+  },
+  null,
+  2,
+);
 
 function parseBigIntField(raw: string, label: string, allowEmpty = false) {
   const trimmed = raw.trim();
@@ -266,6 +287,14 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       maxDataLimit === DEFAULT_FEES_AND_LIMITS.maxDataLimit;
     setIsFeesDefault(isDefault);
   }, [gasFeeBase, gasFeeCreateTokenBase, gasFeeCreateTokenSymbol, gasFeeMultiplier, maxDataLimit]);
+
+  useEffect(() => {
+    if (isNFT && tokenSchemasJson.trim().length === 0) {
+      setTokenSchemasJson(DEFAULT_NFT_SCHEMAS_JSON);
+      setTokenSchemasHasError(false);
+      setIsSchemasDefault(true);
+    }
+  }, [isNFT, tokenSchemasJson]);
 
   const metadataFieldsMap = useMemo(() => metadataFields, [metadataFields]);
 
