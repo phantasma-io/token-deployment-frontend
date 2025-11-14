@@ -51,8 +51,48 @@ const ALLOWED_ICON_MIME_TYPES = new Set([
   "image/svg+xml",
 ]);
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return kb >= 10 ? `${Math.round(kb)} KB` : `${kb.toFixed(1)} KB`;
+  }
+  const mb = kb / 1024;
+  return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
+}
+
+function estimateBase64LengthFromBytes(byteCount: number): number {
+  if (byteCount <= 0) {
+    return 0;
+  }
+  return Math.ceil(byteCount / 3) * 4;
+}
+
+function estimateDecodedBytesFromBase64(base64Payload: string): number {
+  if (!base64Payload) {
+    return 0;
+  }
+  const paddingMatch = base64Payload.match(/=+$/);
+  const padding = paddingMatch ? paddingMatch[0].length : 0;
+  return Math.floor((base64Payload.length / 4) * 3) - padding;
+}
+
+// Phantasma Link refuses Carbon transactions above 64 KB (65,536 hex chars) so we cap the icon payload
+// to leave ~2.5 KB for the rest of the metadata after base64 expansion.
+const ICON_SIZE_LIMIT_ENABLED = true;
+const MAX_ICON_BASE64_PAYLOAD_CHARS = 30000;
+const MAX_ICON_BINARY_BYTES = Math.floor((MAX_ICON_BASE64_PAYLOAD_CHARS / 4) * 3);
+const ICON_SIZE_LIMIT_LABEL = formatBytes(MAX_ICON_BINARY_BYTES);
+const ICON_PAYLOAD_LIMIT_LABEL = MAX_ICON_BASE64_PAYLOAD_CHARS.toLocaleString();
+
 type IconValidationResult =
-  | { ok: true; mimeType: string }
+  | {
+      ok: true;
+      mimeType: string;
+      base64PayloadLength: number;
+      approxBinaryBytes: number;
+    }
   | { ok: false; error: string };
 
 function validateIconDataUri(dataUri: string): IconValidationResult {
@@ -87,6 +127,15 @@ function validateIconDataUri(dataUri: string): IconValidationResult {
     };
   }
 
+  const payloadLength = base64Payload.length;
+  if (ICON_SIZE_LIMIT_ENABLED && payloadLength > MAX_ICON_BASE64_PAYLOAD_CHARS) {
+    const approxBytes = estimateDecodedBytesFromBase64(base64Payload);
+    return {
+      ok: false,
+      error: `Icon data is too large (${formatBytes(approxBytes)}). Base64 payloads above ${ICON_PAYLOAD_LIMIT_LABEL} characters (~${ICON_SIZE_LIMIT_LABEL}) exceed the 64 KB limit enforced by Phantasma Link.`,
+    };
+  }
+
   try {
     // Ensure base64 payload decodes successfully.
     // eslint-disable-next-line no-unused-vars
@@ -98,7 +147,14 @@ function validateIconDataUri(dataUri: string): IconValidationResult {
     };
   }
 
-  return { ok: true, mimeType };
+  const approxBinaryBytes = estimateDecodedBytesFromBase64(base64Payload);
+
+  return {
+    ok: true,
+    mimeType,
+    base64PayloadLength: payloadLength,
+    approxBinaryBytes,
+  };
 }
 
 const DEFAULT_FEES_AND_LIMITS = {
@@ -652,19 +708,50 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                       inputEl.value = "";
                       return;
                     }
+                    const estimatedPayloadChars = estimateBase64LengthFromBytes(
+                      file.size,
+                    );
+                    if (
+                      ICON_SIZE_LIMIT_ENABLED &&
+                      estimatedPayloadChars > MAX_ICON_BASE64_PAYLOAD_CHARS
+                    ) {
+                      const message = `Icon is ${formatBytes(file.size)}, but only ${ICON_SIZE_LIMIT_LABEL} (~${ICON_PAYLOAD_LIMIT_LABEL} base64 chars) fits inside the 64 KB Carbon transaction limit enforced by Phantasma Link.`;
+                      addLog("[icon] Icon rejected - file too large", {
+                        name: file.name,
+                        size_bytes: file.size,
+                        mime: file.type,
+                        estimated_base64_chars: estimatedPayloadChars,
+                        max_base64_chars: MAX_ICON_BASE64_PAYLOAD_CHARS,
+                      });
+                      toast.error(message);
+                      setIconDataUri(null);
+                      setIconFileName(null);
+                      inputEl.value = "";
+                      return;
+                    }
                     const reader = new FileReader();
                     reader.onload = (loadEvt) => {
                       const result = loadEvt.target?.result;
                       if (typeof result === "string") {
-                        setIconDataUri(result);
-                        setIconFileName(file.name);
+                        const validation = validateIconDataUri(result);
+                        if (!validation.ok) {
+                          toast.error(validation.error);
+                          setIconDataUri(null);
+                          setIconFileName(null);
+                        } else {
+                          setIconDataUri(result);
+                          setIconFileName(file.name);
                           addLog("[icon] Icon loaded", {
-                          name: file.name,
-                          size: file.size,
-                          type: file.type,
-                        });
-                        setManualIconInput(result);
-                        setManualIconError(null);
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            base64_payload_chars:
+                              validation.base64PayloadLength,
+                            approx_binary_bytes: validation.approxBinaryBytes,
+                          });
+                          setManualIconInput(result);
+                          setManualIconError(null);
+                        }
                       } else {
                         toast.error("Failed to read icon file");
                         setIconDataUri(null);
@@ -722,6 +809,9 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 </div>
               )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Icons must be PNG/JPEG/SVG data URIs under ~{ICON_SIZE_LIMIT_LABEL} (~{ICON_PAYLOAD_LIMIT_LABEL} base64 chars) so the Carbon transaction stays below the 64 KB limit enforced by Phantasma Link.
+            </p>
             <div className="space-y-2">
               <textarea
                 className="w-full rounded border px-2 py-1 font-mono text-xs"
@@ -756,7 +846,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 <p className="text-xs text-amber-500">{manualIconError}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Paste a valid data URI (PNG, JPEG, or SVG). The payload must be base64 encoded.
+                  Paste a valid data URI (PNG, JPEG, or SVG). The payload must be base64 encoded and stay under ~{ICON_SIZE_LIMIT_LABEL} to satisfy the 64 KB Phantasma Link limit.
                 </p>
               )}
             </div>
