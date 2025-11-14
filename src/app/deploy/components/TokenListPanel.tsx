@@ -10,7 +10,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
+import {
+  getTokenIconSrc,
+  getTokenMetadataMap,
+  getTokenPrimary,
+  isTokenNFT,
+} from "../utils/tokenHelpers";
 
 type TokenListPanelProps = {
   tokens: Token[];
@@ -138,6 +143,12 @@ export function TokenListPanel({
               const isNFTItem = isTokenNFT(token);
               const selectable =
                 !isTokenSelectable || isTokenSelectable(token);
+              const metadataMap = getTokenMetadataMap(token);
+              const iconSrc = getTokenIconSrc(token, metadataMap);
+              const iconAlt =
+                metadataMap.name?.trim() ||
+                token?.name ||
+                `Token ${primary}`;
 
               return (
                 <li
@@ -150,7 +161,7 @@ export function TokenListPanel({
                   ].join(" ")}
                 >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <Button
                         type="button"
                         size="icon"
@@ -162,14 +173,26 @@ export function TokenListPanel({
                         }
                         onClick={() => onToggleExpanded(primary)}
                         className="border border-transparent text-muted-foreground hover:text-foreground"
-                      >
-                        <ChevronDown
-                          size={16}
-                          className={`transition-transform ${
-                            isExpanded ? "rotate-180" : ""
-                          }`}
-                        />
-                      </Button>
+                        >
+                          <ChevronDown
+                            size={16}
+                            className={`transition-transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </Button>
+                      {iconSrc && (
+                        <div className="h-10 w-10 overflow-hidden rounded border bg-background">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={iconSrc}
+                            alt={iconAlt}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      )}
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-bold text-lg">
