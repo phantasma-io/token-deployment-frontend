@@ -1,5 +1,7 @@
 const AMOUNT_REGEX = /^\d+(\.\d+)?$/;
 
+export const INTX_MAX_VALUE = (1n << 255n) - 1n;
+
 export type ParseAmountResult =
   | { ok: true; baseUnits: bigint }
   | { ok: false; error: string };

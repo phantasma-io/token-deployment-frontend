@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import type { AddLogFn } from "../types";
 import { getTokenPrimary } from "../utils/tokenHelpers";
 import { getTokenExtended, mintFungible } from "@/lib/phantasmaClient";
-import { formatBaseUnitsToDecimal, parseHumanAmountToBaseUnits } from "../utils/decimalUnits";
+import { formatBaseUnitsToDecimal, parseHumanAmountToBaseUnits, INTX_MAX_VALUE } from "../utils/decimalUnits";
 import { parseBigIntInput } from "../utils/bigintInputs";
 
 type PhaCtxMinimal = {
@@ -32,7 +32,6 @@ type TokenMintFungibleProps = {
   addLog: AddLogFn;
 };
 
-const MAX_INTX_POSITIVE = (1n << 255n) - 1n;
 const FEE_DEFAULTS = {
   gasFeeBase: "10000",
   feeMultiplier: "1000",
@@ -202,7 +201,7 @@ export function TokenMintFungible({ selectedToken, phaCtx, addLog }: TokenMintFu
 
   useEffect(() => {
     if (amountParse.ok) {
-      if (amountParse.baseUnits > MAX_INTX_POSITIVE) {
+      if (amountParse.baseUnits > INTX_MAX_VALUE) {
         setAmountError("Amount exceeds the maximum supported size");
       } else if (remainingCapacity !== null && amountParse.baseUnits > remainingCapacity) {
         setAmountError("Amount exceeds remaining mintable supply");

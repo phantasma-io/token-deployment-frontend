@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
-import { parseHumanAmountToBaseUnits } from "../utils/decimalUnits";
+import { parseHumanAmountToBaseUnits, INTX_MAX_VALUE } from "../utils/decimalUnits";
 
 import type { AddLogFn } from "../types";
 
@@ -251,6 +251,22 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     return TokenInfoBuilder.checkIsValidSymbol(trimmedSymbol);
   }, [trimmedSymbol]);
 
+  const decimalsValidation = useMemo(() => {
+    if (!Number.isFinite(decimals)) {
+      return { ok: false as const, error: "Decimals must be specified" };
+    }
+    if (!Number.isInteger(decimals)) {
+      return { ok: false as const, error: "Decimals must be an integer" };
+    }
+    if (decimals < 0) {
+      return { ok: false as const, error: "Decimals must be non-negative" };
+    }
+    if (decimals > 255) {
+      return { ok: false as const, error: "Decimals cannot exceed 255" };
+    }
+    return { ok: true as const };
+  }, [decimals]);
+
   const supplyCalculation = useMemo(() => {
     const parsed = parseHumanAmountToBaseUnits(maxSupply, decimals ?? 0, {
       label: "Max supply",
@@ -259,6 +275,12 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     });
     if (!parsed.ok) {
       return { ok: false as const, error: parsed.error };
+    }
+    if (parsed.baseUnits > INTX_MAX_VALUE) {
+      return {
+        ok: false as const,
+        error: "Max supply exceeds the maximum supported size",
+      };
     }
     return { ok: true as const, baseUnits: parsed.baseUnits };
   }, [maxSupply, decimals]);
@@ -350,6 +372,11 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       const validationError =
         symbolValidation.error ?? "Symbol validation error: Unknown error";
       toast.error(validationError);
+      return;
+    }
+    if (!decimalsValidation.ok) {
+      addLog("[error] Decimals validation failed", { error: decimalsValidation.error });
+      toast.error(decimalsValidation.error ?? "Invalid decimals value");
       return;
     }
     if (!supplyCalculation.ok) {
@@ -936,6 +963,9 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
             }}
             disabled={isNFT}
           />
+          {!decimalsValidation.ok && (
+            <p className="mt-1 text-xs text-amber-500">{decimalsValidation.error}</p>
+          )}
         </div>
 
         <div>
