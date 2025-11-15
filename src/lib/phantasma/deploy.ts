@@ -29,7 +29,7 @@ export type DeployParams = {
   tokenSchemasJson?: string; // required for NFTs
   feeOptions?: CreateTokenFeeOptions;
   maxData: bigint;
-  expiry?: bigint | number | null;
+  expiry?: bigint | null;
   addLog?: (message: string, data?: unknown) => void;
 };
 
@@ -114,8 +114,7 @@ export async function deployCarbonToken(
 
   tokenInfoInstance.metadata = serializedMetadata;
 
-  const expiryValue: bigint | undefined =
-    expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
+  const expiryValue = expiry ?? undefined;
 
   let txMsg;
   try {

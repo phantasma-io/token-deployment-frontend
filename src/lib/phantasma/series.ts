@@ -68,15 +68,15 @@ export function mapTokenSeriesResult(entry: TokenSeriesResult, fallbackCarbonTok
 
 export async function listTokenSeries(
   symbol: string,
-  carbonTokenId: bigint | number,
+  carbonTokenId: bigint,
   pageSize: number = 50,
 ): Promise<TokenSeriesListItem[]> {
-  if ((!symbol || !symbol.trim()) && (carbonTokenId === undefined || carbonTokenId === null)) {
-    throw new Error("symbol or carbonTokenId is required");
+  if (!symbol || !symbol.trim()) {
+    throw new Error("symbol is required");
   }
 
   const api = createApi();
-  const normalizedTokenId = BigInt(carbonTokenId);
+  const normalizedTokenId = carbonTokenId;
   const collected: TokenSeriesListItem[] = [];
 
   let cursor = "";
@@ -122,14 +122,14 @@ export async function listTokenSeries(
 
 export type CreateSeriesParams = {
   conn: EasyConnect;
-  carbonTokenId: bigint | number;
+  carbonTokenId: bigint;
   seriesSchema: VmStructSchema; // must include default fields (id, mode, rom) and any standard/custom fields
   // All series metadata values keyed by field name (excluding reserved _i/mode/rom)
   seriesValues: Record<string, string>;
   romHex?: string; // hex string for shared ROM (use "0x" or empty for none)
   feeOptions?: CreateSeriesFeeOptions;
   maxData?: bigint;
-  expiry?: bigint | number | null;
+  expiry?: bigint | null;
   addLog?: (message: string, data?: unknown) => void;
 };
 
@@ -211,13 +211,12 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
   }
 
   // Build tx
-  const expiryValue: bigint | undefined =
-    expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
+  const expiryValue = expiry ?? undefined;
 
   let txMsg;
   try {
     txMsg = CreateTokenSeriesTxHelper.buildTx(
-      BigInt(carbonTokenId as number | bigint),
+      carbonTokenId,
       seriesInfo,
       creatorPk,
       feeOptions,

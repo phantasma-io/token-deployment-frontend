@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
+import { parseHumanAmountToBaseUnits } from "../utils/decimalUnits";
 
 import type { AddLogFn } from "../types";
 
@@ -200,48 +201,6 @@ function parseBigIntField(raw: string, label: string, allowEmpty = false) {
   }
 }
 
-function parseSupplyWithDecimals(raw: string, decimals: number, label: string) {
-  const trimmed = raw.trim();
-  if (!Number.isInteger(decimals) || decimals < 0) {
-    throw new Error(`${label}: Decimals must be a non-negative integer`);
-  }
-
-  if (trimmed.length === 0) {
-    return 0n;
-  }
-
-  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
-    throw new Error(`${label}: Only numeric values are allowed`);
-  }
-
-  const [wholePartRaw, fractionRaw = ""] = trimmed.split(".");
-  const wholePart = wholePartRaw || "0";
-  const fractionPart = fractionRaw || "";
-
-  if (!/^\d+$/.test(wholePart)) {
-    throw new Error(`${label}: Invalid whole part`);
-  }
-
-  if (decimals === 0) {
-    if (fractionPart.length > 0) {
-      throw new Error(`${label}: Fractional value is not allowed when decimals are 0`);
-    }
-    return BigInt(wholePart);
-  }
-
-  if (fractionPart.length > decimals) {
-    throw new Error(
-      `${label}: Fractional precision exceeds decimals (${decimals})`,
-    );
-  }
-
-  const paddedFraction = fractionPart.padEnd(decimals, "0");
-  const combined = `${wholePart}${paddedFraction}`.replace(/^0+/, "") || "0";
-  return BigInt(combined);
-}
-
-
-
 export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDeploymentFormProps>(function TokenDeploymentForm(
   {
     phaCtx,
@@ -293,12 +252,15 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
   }, [trimmedSymbol]);
 
   const supplyCalculation = useMemo(() => {
-    try {
-      const baseUnits = parseSupplyWithDecimals(maxSupply, decimals ?? 0, "Max supply");
-      return { ok: true as const, baseUnits };
-    } catch (err: any) {
-      return { ok: false as const, error: err?.message ?? String(err) };
+    const parsed = parseHumanAmountToBaseUnits(maxSupply, decimals ?? 0, {
+      label: "Max supply",
+      allowEmpty: true,
+      allowZero: true,
+    });
+    if (!parsed.ok) {
+      return { ok: false as const, error: parsed.error };
     }
+    return { ok: true as const, baseUnits: parsed.baseUnits };
   }, [maxSupply, decimals]);
 
   const resetForm = useCallback(() => {

@@ -39,6 +39,7 @@ import {
   type TokenSeriesListItem,
 } from "@/lib/phantasmaClient";
 import { NftPreviewCard } from "./NftPreviewCard";
+import { TokenMintFungible } from "./TokenMintFungible";
 
 type PhaCtxMinimal = {
   conn?: EasyConnect | null;
@@ -601,18 +602,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   }
 
   if (!isNft) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Selected token <span className="font-mono">{tokenPrimary}</span> is fungible
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Minting UI is only available for NFT tokens. Please pick an NFT token.
-        </CardContent>
-      </Card>
-    );
+    return <TokenMintFungible selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />;
   }
 
   return (

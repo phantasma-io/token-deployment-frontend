@@ -1,12 +1,19 @@
 import {
+  Address,
   Bytes32,
   CarbonBinaryWriter,
   EasyConnect,
+  FeeOptions,
+  IntX,
   MintNftFeeOptions,
   MintNonFungibleTxHelper,
   MetadataField,
   NftRomBuilder,
+  SmallString,
   TransactionData,
+  TxMsg,
+  TxMsgMintFungible,
+  TxTypes,
   VmDynamicStruct,
   VmNamedDynamicVariable,
   VmStructSchema,
@@ -22,7 +29,7 @@ import { parseHexBytes, parseVmMetadataValue } from "./metadata";
 
 export type MintNftParams = {
   conn: EasyConnect;
-  carbonTokenId: bigint | number;
+  carbonTokenId: bigint;
   carbonSeriesId: number;
   romSchema: VmStructSchema;
   metadataValues: Record<string, string>;
@@ -30,8 +37,8 @@ export type MintNftParams = {
   ramSchema?: VmStructSchema | null;
   ramValues?: Record<string, string>;
   feeOptions?: MintNftFeeOptions;
-  maxData?: bigint | number;
-  expiry?: bigint | number | null;
+  maxData?: bigint;
+  expiry?: bigint | null;
   addLog?: (message: string, data?: unknown) => void;
 };
 
@@ -152,15 +159,13 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
   const receiverPk = senderPk; // Mint to self for now
 
   const effectiveFee = feeOptions ?? new MintNftFeeOptions();
-  const normalizedMaxData =
-    maxData !== undefined && maxData !== null ? BigInt(maxData as number | bigint) : undefined;
-  const expiryValue =
-    expiry !== undefined && expiry !== null ? BigInt(expiry as number | bigint) : undefined;
+  const normalizedMaxData = maxData ?? 0n;
+  const expiryValue = expiry ?? undefined;
 
   let txMsg;
   try {
     txMsg = MintNonFungibleTxHelper.buildTx(
-      BigInt(carbonTokenId as number | bigint),
+      carbonTokenId,
       Number(carbonSeriesId),
       senderPk,
       receiverPk,
@@ -216,10 +221,10 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
       const txInfo = (confirmation as { status: "success"; tx: TransactionData }).tx;
       if (typeof txInfo?.result === "string") {
         try {
-          const parsed = MintNonFungibleTxHelper.parseResult(
-            BigInt(carbonTokenId as number | bigint),
-            txInfo.result,
-          );
+      const parsed = MintNonFungibleTxHelper.parseResult(
+        carbonTokenId,
+        txInfo.result,
+      );
           carbonNftAddresses = parsed.map((addr) => addr?.ToHex?.() ?? "");
         } catch {
           carbonNftAddresses = undefined;
@@ -247,6 +252,164 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
     txHash: txHash || "pending",
     carbonNftAddresses,
     phantasmaNftId: phantasmaNftId.toString(),
+    result: walletResult,
+  };
+}
+
+export type MintFungibleParams = {
+  conn: EasyConnect;
+  carbonTokenId: bigint;
+  destinationAddress: string;
+  amount: bigint;
+  feeOptions?: FeeOptions;
+  maxData?: bigint;
+  expiry?: bigint | null;
+  addLog?: (message: string, data?: unknown) => void;
+};
+
+export type MintFungibleResult =
+  | { success: true; txHash: string; result?: unknown }
+  | { success: false; error: string };
+
+export async function mintFungible(params: MintFungibleParams): Promise<MintFungibleResult> {
+  const { conn, carbonTokenId, destinationAddress, amount, feeOptions, maxData, expiry, addLog } = params;
+
+  if (!conn) {
+    return { success: false, error: "Wallet connection (conn) is required" };
+  }
+  const tokenId = carbonTokenId;
+  const trimmedAddress = destinationAddress?.trim() ?? "";
+  if (!trimmedAddress) {
+    return { success: false, error: "Destination address is required" };
+  }
+
+  let receiverAddress: Address;
+  try {
+    receiverAddress = Address.FromText(trimmedAddress);
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: `Invalid destination address: ${toMessage(err)}`,
+    };
+  }
+
+  let amountValue: bigint;
+  try {
+    amountValue = BigInt(amount);
+  } catch {
+    return { success: false, error: "Amount must be a valid integer" };
+  }
+  if (amountValue <= 0n) {
+    return { success: false, error: "Amount must be greater than zero" };
+  }
+
+  let amountIntX: IntX;
+  try {
+    amountIntX = IntX.fromBigInt(amountValue);
+  } catch (err: unknown) {
+    return { success: false, error: `Amount cannot be encoded: ${toMessage(err)}` };
+  }
+
+  const receiverPk = receiverAddress.GetPublicKey();
+  if (!receiverPk || receiverPk.length !== 32) {
+    return {
+      success: false,
+      error: "Destination address is missing a valid 32-byte public key",
+    };
+  }
+
+  const senderPkBytes = extractPublicKeyBytes(conn);
+  const senderPk = new Bytes32(senderPkBytes);
+  const recipientPk = new Bytes32(receiverPk);
+
+  const normalizedMaxData = maxData ?? 0n;
+  const expiryValue = expiry ?? undefined;
+
+  const fees = feeOptions ?? new FeeOptions();
+
+  const mintMsg = new TxMsgMintFungible();
+  mintMsg.tokenId = tokenId;
+  mintMsg.to = recipientPk;
+  mintMsg.amount = amountIntX;
+
+  const txMsg = new TxMsg();
+  txMsg.type = TxTypes.MintFungible;
+  txMsg.expiry = expiryValue ?? BigInt(Date.now() + 60_000);
+  txMsg.maxGas = fees.calculateMaxGas();
+  txMsg.maxData = normalizedMaxData;
+  txMsg.gasFrom = senderPk;
+  txMsg.payload = SmallString.empty;
+  txMsg.msg = mintMsg;
+
+  addLog?.("[mint] Prepared fungible mint tx", {
+    tokenId: tokenId.toString(),
+    destinationAddress: trimmedAddress,
+    amount: amountValue.toString(),
+    maxData: normalizedMaxData?.toString() ?? null,
+    expiry: txMsg.expiry.toString(),
+  });
+
+  let walletResult: { hash: string; id: number; success: boolean };
+  try {
+    walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
+      conn.signCarbonTransaction(
+        txMsg,
+        (res: unknown) => {
+          if (!isWalletSignResult(res)) {
+            reject(new Error("Unexpected wallet response"));
+            return;
+          }
+          if (res.success === false) {
+            reject(new Error(res.error || "Wallet rejected transaction"));
+            return;
+          }
+          resolve({ hash: res.hash, id: res.id, success: true });
+        },
+        (err: unknown) => {
+          reject(ensureError(err));
+        },
+      );
+    });
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: toMessage(err) || "Wallet rejected transaction",
+    };
+  }
+
+  const txHash = walletResult.hash;
+
+  if (txHash) {
+    const api = createApi();
+    const confirmation = await waitForTransactionConfirmation(api, txHash, {
+      maxAttempts: 30,
+      delayMs: 1000,
+      failureDetailAttempts: 6,
+    });
+
+    if (confirmation.status === "failure") {
+      const failure = confirmation as { status: "failure"; tx: TransactionData; message?: string };
+      const message = failure.message
+        ? failure.message
+        : "Transaction execution failed";
+      return { success: false, error: `Transaction ${txHash} failed: ${message}` };
+    }
+
+    if (confirmation.status !== "success") {
+      return { success: false, error: `Transaction ${txHash} confirmation timed out` };
+    }
+  }
+
+  addLog?.("[mint] Fungible mint transaction submitted", {
+    tokenId: tokenId.toString(),
+    destinationAddress: trimmedAddress,
+    amount: amountValue.toString(),
+    txHash: txHash || "pending",
+  });
+
+  return {
+    success: true,
+    txHash: txHash || "pending",
     result: walletResult,
   };
 }

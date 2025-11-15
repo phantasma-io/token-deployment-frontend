@@ -12,7 +12,14 @@ export {
   listTokenSeries,
   type TokenSeriesListItem,
 } from "./phantasma/series";
-export { mintNft, type MintNftParams, type MintNftResult } from "./phantasma/mint";
+export {
+  mintNft,
+  type MintNftParams,
+  type MintNftResult,
+  mintFungible,
+  type MintFungibleParams,
+  type MintFungibleResult,
+} from "./phantasma/mint";
 export {
   listTokenNfts,
   type ListTokenNftsParams,
