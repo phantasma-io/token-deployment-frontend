@@ -11,6 +11,7 @@ import {
   nftDefaultMetadataFields,
   VmType,
   NFT,
+  MintNftFeeOptions,
 } from "phantasma-sdk-ts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import {
   type TokenSeriesListItem,
 } from "@/lib/phantasmaClient";
 import { NftPreviewCard } from "./NftPreviewCard";
+import { parseBigIntInput } from "../utils/bigintInputs";
 import { TokenMintFungible } from "./TokenMintFungible";
 
 type PhaCtxMinimal = {
@@ -54,7 +56,12 @@ type TokenMintTabProps = {
 type RomField = { name: string; type: VmType };
 
 const DEFAULT_ROM_HEX = "0x";
-const DEFAULT_MAX_DATA = 100000000n;
+const DEFAULT_MAX_DATA = 100n;
+const NFT_FEE_DEFAULTS = {
+  gasFeeBase: "10000",
+  feeMultiplier: "1000",
+  maxDataLimit: DEFAULT_MAX_DATA.toString(),
+};
 const NFT_PAGE_SIZE = 10;
 
 export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProps) {
@@ -93,6 +100,11 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   const [nftNextCursor, setNftNextCursor] = useState<string | null>(null);
   const [nftCursorHistory, setNftCursorHistory] = useState<string[]>([""]);
   const [nftPageIndex, setNftPageIndex] = useState(0);
+  const [feesExpanded, setFeesExpanded] = useState(false);
+  const [feesAreDefault, setFeesAreDefault] = useState(true);
+  const [gasFeeBase, setGasFeeBase] = useState(NFT_FEE_DEFAULTS.gasFeeBase);
+  const [feeMultiplier, setFeeMultiplier] = useState(NFT_FEE_DEFAULTS.feeMultiplier);
+  const [maxDataLimit, setMaxDataLimit] = useState(NFT_FEE_DEFAULTS.maxDataLimit);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
   const canSign = !!walletAddress && !!phaCtx?.conn;
@@ -124,6 +136,11 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       }
       return cleared;
     });
+    setGasFeeBase(NFT_FEE_DEFAULTS.gasFeeBase);
+    setFeeMultiplier(NFT_FEE_DEFAULTS.feeMultiplier);
+    setMaxDataLimit(NFT_FEE_DEFAULTS.maxDataLimit);
+    setFeesExpanded(false);
+    setFeesAreDefault(true);
   }, []);
 
   const resetNftListing = useCallback(() => {
@@ -147,6 +164,14 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   useEffect(() => {
     setImagePreviewError(false);
   }, [imageURL]);
+
+  useEffect(() => {
+    const defaults =
+      gasFeeBase.trim() === NFT_FEE_DEFAULTS.gasFeeBase &&
+      feeMultiplier.trim() === NFT_FEE_DEFAULTS.feeMultiplier &&
+      maxDataLimit.trim() === NFT_FEE_DEFAULTS.maxDataLimit;
+    setFeesAreDefault(defaults);
+  }, [gasFeeBase, feeMultiplier, maxDataLimit]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -513,12 +538,36 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         }
       }
 
+      let gasFeeBaseValue: bigint;
+      let feeMultiplierValue: bigint;
+      let maxDataValue: bigint;
+      try {
+        gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+        feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+        maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", {
+          allowEmpty: true,
+          defaultValue: DEFAULT_MAX_DATA,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setMintError(message);
+        addLog("[error] Mint fee parsing failed", { error: message });
+        return;
+      }
+
+      const feeOptions = new MintNftFeeOptions(gasFeeBaseValue, feeMultiplierValue);
+
       addLog("[mint] Submitting mint request", {
         symbol: selectedToken.symbol,
         carbonTokenId: String(carbonId),
         seriesId: selectedSeriesId,
         metadataKeys: Object.keys(metadata),
         ramKeys: shouldSendRam ? Object.keys(ramInputValues) : [],
+        fees: {
+          gasFeeBase: gasFeeBaseValue.toString(),
+          feeMultiplier: feeMultiplierValue.toString(),
+          maxData: maxDataValue.toString(),
+        },
       });
 
       const res = await mintNft({
@@ -530,7 +579,8 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         romHex: romHex.trim(),
         ramSchema: shouldSendRam ? ramSchema : null,
         ramValues: shouldSendRam ? ramInputValues : undefined,
-        maxData: DEFAULT_MAX_DATA,
+        maxData: maxDataValue,
+        feeOptions,
         addLog,
       });
 
@@ -571,6 +621,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     royaltiesBaseUnitsString,
     extraValues,
     ramValues,
+    gasFeeBase,
+    feeMultiplier,
+    maxDataLimit,
     addLog,
     resetInputs,
     loadSeriesNfts,
@@ -890,6 +943,71 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                 </div>
               </div>
             )}
+
+            <div className="rounded-lg border p-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left"
+                onClick={() => setFeesExpanded((prev) => !prev)}
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className={`h-4 w-4 transition-transform ${feesExpanded ? "rotate-180" : ""}`}
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M12 15.75a.75.75 0 0 1-.53-.22l-5-5a.75.75 0 1 1 1.06-1.06L12 13.94l4.47-4.47a.75.75 0 0 1 1.06 1.06l-5 5a.75.75 0 0 1-.53.22z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fees &amp; limits
+                  </h3>
+                  {feesAreDefault && (
+                    <span className="text-xs text-emerald-600">Using default fees</span>
+                  )}
+                </div>
+              </button>
+              {feesExpanded ? (
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Gas fee base</label>
+                    <input
+                      className="w-full rounded border px-2 py-1 font-mono"
+                      value={gasFeeBase}
+                      onChange={(e) => setGasFeeBase(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Fee multiplier</label>
+                    <input
+                      className="w-full rounded border px-2 py-1 font-mono"
+                      value={feeMultiplier}
+                      onChange={(e) => setFeeMultiplier(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Max data</label>
+                    <input
+                      className="w-full rounded border px-2 py-1 font-mono"
+                      value={maxDataLimit}
+                      onChange={(e) => setMaxDataLimit(e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Default: {NFT_FEE_DEFAULTS.maxDataLimit}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {feesAreDefault
+                    ? "Using default Carbon gas fees and payload limit."
+                    : "Custom fees will be applied to this mint transaction."}
+                </p>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               <Button
