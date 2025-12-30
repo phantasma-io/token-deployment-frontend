@@ -41,3 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 USE_ONLY_AS_DOCUMENTATION
+.codex
