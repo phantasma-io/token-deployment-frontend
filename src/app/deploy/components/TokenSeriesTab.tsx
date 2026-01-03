@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Token, EasyConnect, VmStructSchema, standardMetadataFields, seriesDefaultMetadataFields, VmStructSchemaResult, vmStructSchemaFromRpcResult, VmType } from "phantasma-sdk-ts";
+import {
+  CreateSeriesFeeOptions,
+  EasyConnect,
+  Token,
+  VmStructSchema,
+  VmStructSchemaResult,
+  VmType,
+  seriesDefaultMetadataFields,
+  standardMetadataFields,
+  vmStructSchemaFromRpcResult,
+} from "phantasma-sdk-ts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +23,8 @@ import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent } from "../utils/royalties";
 import { normalizeImageUrl } from "../utils/urlHelpers";
 import { formatVmTypeLabel } from "../utils/vmTypeLabel";
+import { parseBigIntInput } from "../utils/bigintInputs";
+import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
 import type { AddLogFn } from "../types";
 import { createSeries, getTokenExtended } from "@/lib/phantasmaClient";
@@ -28,6 +40,14 @@ type TokenSeriesTabProps = {
 };
 
 type SeriesField = { name: string; type: VmType };
+
+const DEFAULT_SERIES_MAX_DATA = 100000000n;
+const SERIES_FEE_DEFAULTS = {
+  gasFeeBase: "10000",
+  gasFeeCreateSeriesBase: "2500000000",
+  feeMultiplier: "10000",
+  maxDataLimit: DEFAULT_SERIES_MAX_DATA.toString(),
+};
 
 export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTabProps) {
   const [loading, setLoading] = useState(false);
@@ -49,6 +69,14 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const [txHash, setTxHash] = useState<string | null>(null);
   const [seriesId, setSeriesId] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [feesExpanded, setFeesExpanded] = useState(false);
+  const [feesAreDefault, setFeesAreDefault] = useState(true);
+  const [gasFeeBase, setGasFeeBase] = useState(SERIES_FEE_DEFAULTS.gasFeeBase);
+  const [gasFeeCreateSeriesBase, setGasFeeCreateSeriesBase] = useState(
+    SERIES_FEE_DEFAULTS.gasFeeCreateSeriesBase,
+  );
+  const [feeMultiplier, setFeeMultiplier] = useState(SERIES_FEE_DEFAULTS.feeMultiplier);
+  const [maxDataLimit, setMaxDataLimit] = useState(SERIES_FEE_DEFAULTS.maxDataLimit);
 
   const walletAddress = phaCtx?.conn?.link?.account?.address ?? null;
   const canSign = !!walletAddress && !!phaCtx?.conn;
@@ -67,6 +95,12 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     setInfoURL("");
     setRoyaltiesPercent("");
     setRomHex("0x");
+    setGasFeeBase(SERIES_FEE_DEFAULTS.gasFeeBase);
+    setGasFeeCreateSeriesBase(SERIES_FEE_DEFAULTS.gasFeeCreateSeriesBase);
+    setFeeMultiplier(SERIES_FEE_DEFAULTS.feeMultiplier);
+    setMaxDataLimit(SERIES_FEE_DEFAULTS.maxDataLimit);
+    setFeesExpanded(false);
+    setFeesAreDefault(true);
     setExtraValues((prev) => {
       const cleared: Record<string, string> = {};
       for (const key of Object.keys(prev)) {
@@ -86,6 +120,40 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   useEffect(() => {
     setImagePreviewError(false);
   }, [imageURL]);
+
+  useEffect(() => {
+    const defaults =
+      gasFeeBase.trim() === SERIES_FEE_DEFAULTS.gasFeeBase &&
+      gasFeeCreateSeriesBase.trim() === SERIES_FEE_DEFAULTS.gasFeeCreateSeriesBase &&
+      feeMultiplier.trim() === SERIES_FEE_DEFAULTS.feeMultiplier &&
+      maxDataLimit.trim() === SERIES_FEE_DEFAULTS.maxDataLimit;
+    setFeesAreDefault(defaults);
+  }, [gasFeeBase, gasFeeCreateSeriesBase, feeMultiplier, maxDataLimit]);
+
+  const feeSummary = useMemo(() => {
+    try {
+      const gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+      const gasFeeCreateSeriesBaseValue = parseBigIntInput(
+        gasFeeCreateSeriesBase,
+        "Gas fee create series base",
+      );
+      const feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+      const maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", {
+        allowEmpty: true,
+        defaultValue: DEFAULT_SERIES_MAX_DATA,
+      });
+      const feeOptions = new CreateSeriesFeeOptions(
+        gasFeeBaseValue,
+        gasFeeCreateSeriesBaseValue,
+        feeMultiplierValue,
+      );
+      const maxGasValue = feeOptions.calculateMaxGas();
+      return { ok: true as const, maxGas: maxGasValue, maxData: maxDataValue };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid fee configuration";
+      return { ok: false as const, error: message };
+    }
+  }, [gasFeeBase, gasFeeCreateSeriesBase, feeMultiplier, maxDataLimit]);
 
   const loadTokenDetails = useCallback(async () => {
     if (!selectedToken?.symbol) return;
@@ -277,10 +345,44 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
         values[k] = v;
       }
 
+      let gasFeeBaseValue: bigint;
+      let gasFeeCreateSeriesBaseValue: bigint;
+      let feeMultiplierValue: bigint;
+      let maxDataValue: bigint;
+      try {
+        gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+        gasFeeCreateSeriesBaseValue = parseBigIntInput(
+          gasFeeCreateSeriesBase,
+          "Gas fee create series base",
+        );
+        feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+        maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", {
+          allowEmpty: true,
+          defaultValue: DEFAULT_SERIES_MAX_DATA,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setSubmitError(message);
+        addLog("[error] Series fee parsing failed", { error: message });
+        return;
+      }
+
+      const feeOptions = new CreateSeriesFeeOptions(
+        gasFeeBaseValue,
+        gasFeeCreateSeriesBaseValue,
+        feeMultiplierValue,
+      );
+
       addLog('[series] Debug series payload', {
         schemaKeys: (schema.fields ?? []).map((f) => f.name?.data),
         valuesKeys: Object.keys(values),
         extras: extraValues,
+        fees: {
+          gasFeeBase: gasFeeBaseValue.toString(),
+          gasFeeCreateSeriesBase: gasFeeCreateSeriesBaseValue.toString(),
+          feeMultiplier: feeMultiplierValue.toString(),
+          maxData: maxDataValue.toString(),
+        },
       });
 
       const res = await createSeries({
@@ -289,7 +391,8 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
         seriesSchema: schema,
         seriesValues: values,
         romHex: visibleStandard.rom ? romHex.trim() : undefined,
-        maxData: 100000000n,
+        feeOptions,
+        maxData: maxDataValue,
         addLog,
       });
 
@@ -307,7 +410,27 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     } finally {
       setSubmitting(false);
     }
-  }, [selectedToken?.symbol, carbonId, phaCtx?.conn, visibleStandard, name, description, imageURL, infoURL, royaltiesPercent, royaltiesBaseUnitsString, romHex, addLog, seriesSchema, extraValues, resetInputs]);
+  }, [
+    selectedToken?.symbol,
+    carbonId,
+    phaCtx?.conn,
+    visibleStandard,
+    name,
+    description,
+    imageURL,
+    infoURL,
+    royaltiesPercent,
+    royaltiesBaseUnitsString,
+    romHex,
+    gasFeeBase,
+    gasFeeCreateSeriesBase,
+    feeMultiplier,
+    maxDataLimit,
+    addLog,
+    seriesSchema,
+    extraValues,
+    resetInputs,
+  ]);
 
   if (!selectedToken) {
     return (
@@ -498,6 +621,97 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
                     required
                   />
                 </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 text-left"
+                onClick={() => setFeesExpanded((prev) => !prev)}
+                aria-expanded={feesExpanded}
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className={`h-4 w-4 transition-transform ${feesExpanded ? "rotate-180" : ""}`}
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M12 15.75a.75.75 0 0 1-.53-.22l-5-5a.75.75 0 1 1 1.06-1.06L12 13.94l4.47-4.47a.75.75 0 0 1 1.06 1.06l-5 5a.75.75 0 0 1-.53.22z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    Fees &amp; limits
+                  </h3>
+                  {feesAreDefault && (
+                    <span className="text-xs text-emerald-600">Using default fees</span>
+                  )}
+                </div>
+              </button>
+              {feesExpanded ? (
+                <>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Gas fee base</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={gasFeeBase}
+                        onChange={(e) => setGasFeeBase(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Gas fee (create series base)</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={gasFeeCreateSeriesBase}
+                        onChange={(e) => setGasFeeCreateSeriesBase(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Fee multiplier</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={feeMultiplier}
+                        onChange={(e) => setFeeMultiplier(e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium mb-1">Max data (SOUL)</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={maxDataLimit}
+                        onChange={(e) => setMaxDataLimit(e.target.value)}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Default: {SERIES_FEE_DEFAULTS.maxDataLimit}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <div className="font-medium text-foreground">Estimated totals (max)</div>
+                    {feeSummary.ok ? (
+                      <div className="mt-1 space-y-1">
+                        <div>
+                          KCAL: <span className="font-mono">{formatKcalAmount(feeSummary.maxGas)}</span>
+                        </div>
+                        <div>
+                          SOUL: <span className="font-mono">{formatSoulAmount(feeSummary.maxData)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-amber-500">{feeSummary.error}</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {feesAreDefault
+                    ? "Using default Carbon gas fees and max data limit."
+                    : "Custom fees will be applied to this series creation."}
+                </p>
               )}
             </div>
 
