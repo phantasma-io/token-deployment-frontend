@@ -29,6 +29,7 @@ import {
 } from "@/lib/phantasmaClient";
 import { NftPreviewCard } from "./NftPreviewCard";
 import { parseBigIntInput } from "../utils/bigintInputs";
+import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
 type PhaCtxMinimal = {
   conn?: EasyConnect | null;
@@ -554,6 +555,42 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
     );
   }, [gasFeeBase, feeMultiplier, maxDataLimit]);
 
+  const feeSummary = useMemo(() => {
+    try {
+      const gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+      const feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+      const maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", {
+        allowEmpty: true,
+        defaultValue: 0n,
+      });
+      if (infusionQueue.length === 0) {
+        return { ok: false as const, error: "Add NFTs to the queue to estimate totals." };
+      }
+
+      const feeOptions = new FeeOptions(gasFeeBaseValue, feeMultiplierValue);
+
+      // Mirror infuseNfts grouping to keep the max gas estimate aligned with tx construction.
+      const groupedCounts = new Map<string, number>();
+      for (const item of infusionQueue) {
+        const key = item.carbonTokenId.toString();
+        groupedCounts.set(key, (groupedCounts.get(key) ?? 0) + 1);
+      }
+
+      let maxGasValue: bigint;
+      if (groupedCounts.size === 1) {
+        const count = Array.from(groupedCounts.values())[0] ?? 0;
+        maxGasValue = feeOptions.calculateMaxGas(count);
+      } else {
+        maxGasValue = feeOptions.calculateMaxGas(infusionQueue.length);
+      }
+
+      return { ok: true as const, maxGas: maxGasValue, maxData: maxDataValue };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid fee configuration";
+      return { ok: false as const, error: message };
+    }
+  }, [gasFeeBase, feeMultiplier, maxDataLimit, infusionQueue]);
+
   if (!selectedToken) {
     return (
       <Card>
@@ -994,7 +1031,7 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium mb-1">Max data (bytes)</label>
+                        <label className="block text-sm font-medium mb-1">Max data (SOUL)</label>
                         <input
                           className="w-full rounded border px-2 py-1 font-mono"
                           inputMode="numeric"
@@ -1002,6 +1039,21 @@ export function TokenInfuseTab({ selectedToken, phaCtx, addLog }: TokenInfuseTab
                           onChange={(e) => setMaxDataLimit(e.target.value)}
                         />
                       </div>
+                    </div>
+                    <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+                      <div className="font-medium text-foreground">Estimated totals (max)</div>
+                      {feeSummary.ok ? (
+                        <div className="mt-1 space-y-1">
+                          <div>
+                            KCAL: <span className="font-mono">{formatKcalAmount(feeSummary.maxGas)}</span>
+                          </div>
+                          <div>
+                            SOUL: <span className="font-mono">{formatSoulAmount(feeSummary.maxData)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-amber-500">{feeSummary.error}</div>
+                      )}
                     </div>
                   </div>
                 ) : null}

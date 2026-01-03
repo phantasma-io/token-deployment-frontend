@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { deployCarbonToken } from "@/lib/phantasmaClient";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
 import { parseHumanAmountToBaseUnits, INTX_MAX_VALUE } from "../utils/decimalUnits";
+import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
 import type { AddLogFn } from "../types";
 
@@ -284,6 +285,38 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     }
     return { ok: true as const, baseUnits: parsed.baseUnits };
   }, [maxSupply, decimals]);
+
+  const feeSummary = useMemo(() => {
+    try {
+      const feeConfig = new CreateTokenFeeOptions();
+      feeConfig.gasFeeBase = parseBigIntField(gasFeeBase, "Gas fee base");
+      feeConfig.gasFeeCreateTokenBase = parseBigIntField(
+        gasFeeCreateTokenBase,
+        "Gas fee create token base",
+      );
+      feeConfig.gasFeeCreateTokenSymbol = parseBigIntField(
+        gasFeeCreateTokenSymbol,
+        "Gas fee create token symbol",
+      );
+      feeConfig.feeMultiplier = parseBigIntField(
+        gasFeeMultiplier,
+        "Gas fee multiplier",
+      );
+      const maxDataValue = parseBigIntField(maxDataLimit, "Max data", true);
+      const maxGasValue = feeConfig.calculateMaxGas({ data: trimmedSymbol });
+      return { ok: true as const, maxGas: maxGasValue, maxData: maxDataValue };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid fee configuration";
+      return { ok: false as const, error: message };
+    }
+  }, [
+    gasFeeBase,
+    gasFeeCreateTokenBase,
+    gasFeeCreateTokenSymbol,
+    gasFeeMultiplier,
+    maxDataLimit,
+    trimmedSymbol,
+  ]);
 
   const resetForm = useCallback(() => {
     setSymbol("");
@@ -1132,7 +1165,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium mb-1">Max data</label>
+                <label className="block text-sm font-medium mb-1">Max data (SOUL)</label>
                 <input
                   className="w-full rounded border px-2 py-1 font-mono"
                   inputMode="numeric"
@@ -1140,6 +1173,21 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                   onChange={(e) => setMaxDataLimit(e.target.value)}
                 />
               </div>
+            </div>
+            <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+              <div className="font-medium text-foreground">Estimated totals (max)</div>
+              {feeSummary.ok ? (
+                <div className="mt-1 space-y-1">
+                  <div>
+                    KCAL: <span className="font-mono">{formatKcalAmount(feeSummary.maxGas)}</span>
+                  </div>
+                  <div>
+                    SOUL: <span className="font-mono">{formatSoulAmount(feeSummary.maxData)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-1 text-amber-500">{feeSummary.error}</div>
+              )}
             </div>
           </div>
         ) : null}

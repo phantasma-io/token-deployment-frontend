@@ -41,6 +41,7 @@ import {
 } from "@/lib/phantasmaClient";
 import { NftPreviewCard } from "./NftPreviewCard";
 import { parseBigIntInput } from "../utils/bigintInputs";
+import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 import { TokenMintFungible } from "./TokenMintFungible";
 
 type PhaCtxMinimal = {
@@ -171,6 +172,23 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       feeMultiplier.trim() === NFT_FEE_DEFAULTS.feeMultiplier &&
       maxDataLimit.trim() === NFT_FEE_DEFAULTS.maxDataLimit;
     setFeesAreDefault(defaults);
+  }, [gasFeeBase, feeMultiplier, maxDataLimit]);
+
+  const feeSummary = useMemo(() => {
+    try {
+      const gasFeeBaseValue = parseBigIntInput(gasFeeBase, "Gas fee base");
+      const feeMultiplierValue = parseBigIntInput(feeMultiplier, "Fee multiplier");
+      const maxDataValue = parseBigIntInput(maxDataLimit, "Max data limit", {
+        allowEmpty: true,
+        defaultValue: DEFAULT_MAX_DATA,
+      });
+      const feeOptions = new MintNftFeeOptions(gasFeeBaseValue, feeMultiplierValue);
+      const maxGasValue = feeOptions.calculateMaxGas();
+      return { ok: true as const, maxGas: maxGasValue, maxData: maxDataValue };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid fee configuration";
+      return { ok: false as const, error: message };
+    }
   }, [gasFeeBase, feeMultiplier, maxDataLimit]);
 
   const loadTokenDetails = useCallback(async () => {
@@ -971,35 +989,52 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                 </div>
               </button>
               {feesExpanded ? (
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Gas fee base</label>
-                    <input
-                      className="w-full rounded border px-2 py-1 font-mono"
-                      value={gasFeeBase}
-                      onChange={(e) => setGasFeeBase(e.target.value)}
-                    />
+                <>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Gas fee base</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={gasFeeBase}
+                        onChange={(e) => setGasFeeBase(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Fee multiplier</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={feeMultiplier}
+                        onChange={(e) => setFeeMultiplier(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Max data (SOUL)</label>
+                      <input
+                        className="w-full rounded border px-2 py-1 font-mono"
+                        value={maxDataLimit}
+                        onChange={(e) => setMaxDataLimit(e.target.value)}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Default: {NFT_FEE_DEFAULTS.maxDataLimit}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Fee multiplier</label>
-                    <input
-                      className="w-full rounded border px-2 py-1 font-mono"
-                      value={feeMultiplier}
-                      onChange={(e) => setFeeMultiplier(e.target.value)}
-                    />
+                  <div className="rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <div className="font-medium text-foreground">Estimated totals (max)</div>
+                    {feeSummary.ok ? (
+                      <div className="mt-1 space-y-1">
+                        <div>
+                          KCAL: <span className="font-mono">{formatKcalAmount(feeSummary.maxGas)}</span>
+                        </div>
+                        <div>
+                          SOUL: <span className="font-mono">{formatSoulAmount(feeSummary.maxData)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-amber-500">{feeSummary.error}</div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Max data</label>
-                    <input
-                      className="w-full rounded border px-2 py-1 font-mono"
-                      value={maxDataLimit}
-                      onChange={(e) => setMaxDataLimit(e.target.value)}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Default: {NFT_FEE_DEFAULTS.maxDataLimit}
-                    </p>
-                  </div>
-                </div>
+                </>
               ) : (
                 <p className="mt-3 text-xs text-muted-foreground">
                   {feesAreDefault
