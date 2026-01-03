@@ -49,7 +49,7 @@ const ALLOWED_ICON_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/jpg",
-  "image/svg+xml",
+  "image/webp",
 ]);
 
 function formatBytes(bytes: number): string {
@@ -685,7 +685,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 <span>Choose file</span>
                 <input
                   type="file"
-                  accept=".png,.jpg,.jpeg,.svg"
+                  accept=".png,.jpg,.jpeg,.webp"
                   className="hidden"
                   ref={fileInputRef}
                   onChange={(event) => {
@@ -799,7 +799,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Icons must be PNG/JPEG/SVG data URIs under ~{ICON_SIZE_LIMIT_LABEL} (~{ICON_PAYLOAD_LIMIT_LABEL} base64 chars) so the Carbon transaction stays below the 64 KB limit enforced by Phantasma Link.
+              Icons must be PNG/JPEG/WebP data URIs under ~{ICON_SIZE_LIMIT_LABEL} (~{ICON_PAYLOAD_LIMIT_LABEL} base64 chars) so the Carbon transaction stays below the 64 KB limit enforced by Phantasma Link.
             </p>
             <div className="space-y-2">
               <textarea
@@ -835,7 +835,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 <p className="text-xs text-amber-500">{manualIconError}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Paste a valid data URI (PNG, JPEG, or SVG). The payload must be base64 encoded and stay under ~{ICON_SIZE_LIMIT_LABEL} to satisfy the 64 KB Phantasma Link limit.
+                  Paste a valid data URI (PNG, JPEG, or WebP). The payload must be base64 encoded and stay under ~{ICON_SIZE_LIMIT_LABEL} to satisfy the 64 KB Phantasma Link limit.
                 </p>
               )}
             </div>
