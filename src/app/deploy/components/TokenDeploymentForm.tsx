@@ -262,11 +262,17 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     if (decimals < 0) {
       return { ok: false as const, error: "Decimals must be non-negative" };
     }
-    if (decimals > 255) {
-      return { ok: false as const, error: "Decimals cannot exceed 255" };
+    if (isNFT) {
+      if (decimals !== 0) {
+        return { ok: false as const, error: "NFT decimals must be 0" };
+      }
+      return { ok: true as const };
+    }
+    if (decimals > 64) {
+      return { ok: false as const, error: "Decimals cannot exceed 64" };
     }
     return { ok: true as const };
-  }, [decimals]);
+  }, [decimals, isNFT]);
 
   const supplyCalculation = useMemo(() => {
     const parsed = parseHumanAmountToBaseUnits(maxSupply, decimals ?? 0, {
@@ -987,6 +993,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
           <input
             type="number"
             min={0}
+            max={isNFT ? 0 : 64}
             className="w-full rounded border px-2 py-1"
             value={decimals}
             onChange={(e) => {
