@@ -667,8 +667,10 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
             type="button"
             variant={isNFT ? "default" : "outline"}
             onClick={() => {
+              if (!isNFT) {
+                setLastFungibleDecimals(decimals);
+              }
               setIsNFT(true);
-              setLastFungibleDecimals(decimals);
               setDecimals(0);
             }}
           >
