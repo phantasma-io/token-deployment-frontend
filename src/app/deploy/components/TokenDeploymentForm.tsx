@@ -1327,7 +1327,8 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
           </div>
         )}
         <div className="text-xs text-muted-foreground">
-          RPC: {process.env.NEXT_PUBLIC_API_URL ?? "local"}
+          Nexus: {process.env.NEXT_PUBLIC_PHANTASMA_NEXUS} | RPC:{" "}
+          {process.env.NEXT_PUBLIC_API_URL}
         </div>
       </div>
     </div>
