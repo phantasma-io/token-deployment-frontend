@@ -219,56 +219,63 @@ const DeployPage = observer(() => {
   );
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Token Deployment</h1>
-          <p className="text-muted-foreground">
-            Deploy new Carbon tokens on Phantasma blockchain
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PhaAccountWidgetV1 state={phaCtx} />
-          <ThemeToggle />
-        </div>
-      </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-rose-100/40 via-background to-background dark:from-rose-900/30">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+        <header className="flex flex-wrap items-center justify-between gap-6">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              PHANTASMA NETWORK
+            </div>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+              Token Deployment
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Deploy new Carbon tokens on Phantasma blockchain
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-2 shadow-sm backdrop-blur">
+            <PhaAccountWidgetV1 state={phaCtx} />
+            <ThemeToggle />
+          </div>
+        </header>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <TokenListPanel
-          tokens={tokens}
-          loading={loadingTokens}
-          currentPage={currentPage}
-          pageSize={PAGE_SIZE}
-          onPrevPage={handlePrevPage}
-          onNextPage={handleNextPage}
-          onToggleExpanded={toggleExpanded}
-          expandedTokens={expandedTokens}
-          onRefresh={handleRefreshTokens}
-          hasWalletAddress={!!walletAddress}
-          canSelectToken={activeTab !== "deploy"}
-          selectedTokenKey={activeTab === "deploy" ? null : selectedTokenKey}
-          onSelectToken={handleSelectToken}
-          isTokenSelectable={activeTab !== "deploy" ? isTokenSelectable : undefined}
-          selectionDisabledMessage={
-            activeTab === "series"
-              ? "Series can only be created for NFT tokens"
-              : activeTab === "infuse"
-                ? "Infusion is only supported for NFT tokens"
-                : undefined
-          }
-        />
-        <TokenActionsTabs
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          phaCtx={phaCtx}
-          addLog={addLog}
-          onRefreshTokens={refreshTokens}
-          expandToken={expandToken}
-          selectedToken={activeTab === "deploy" ? null : selectedToken}
-        />
-      </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <TokenListPanel
+            tokens={tokens}
+            loading={loadingTokens}
+            currentPage={currentPage}
+            pageSize={PAGE_SIZE}
+            onPrevPage={handlePrevPage}
+            onNextPage={handleNextPage}
+            onToggleExpanded={toggleExpanded}
+            expandedTokens={expandedTokens}
+            onRefresh={handleRefreshTokens}
+            hasWalletAddress={!!walletAddress}
+            canSelectToken={activeTab !== "deploy"}
+            selectedTokenKey={activeTab === "deploy" ? null : selectedTokenKey}
+            onSelectToken={handleSelectToken}
+            isTokenSelectable={activeTab !== "deploy" ? isTokenSelectable : undefined}
+            selectionDisabledMessage={
+              activeTab === "series"
+                ? "Series can only be created for NFT tokens"
+                : activeTab === "infuse"
+                  ? "Infusion is only supported for NFT tokens"
+                  : undefined
+            }
+          />
+          <TokenActionsTabs
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            phaCtx={phaCtx}
+            addLog={addLog}
+            onRefreshTokens={refreshTokens}
+            expandToken={expandToken}
+            selectedToken={activeTab === "deploy" ? null : selectedToken}
+          />
+        </div>
 
-      <DebugLogger heading="Detailed Debug Logs" logs={debugLogs} clearLogs={clearLogs} />
+        <DebugLogger heading="Detailed Debug Logs" logs={debugLogs} clearLogs={clearLogs} />
+      </div>
     </div>
   );
 });
