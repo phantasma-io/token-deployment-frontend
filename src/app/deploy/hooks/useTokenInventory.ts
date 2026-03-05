@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import type { Token } from "phantasma-sdk-ts";
 
 import { getTokens } from "@/lib/phantasmaClient";
+import { ensureError } from "@/lib/phantasma/errors";
 
 import type { AddLogFn } from "../types";
 
@@ -57,28 +58,27 @@ export function useTokenInventory(addLog: AddLogFn, pageSize = 10) {
           return Math.min(prev, totalPages);
         });
         addLog("[success] Tokens state updated", { tokens_count: (list ?? []).length });
-      } catch (err: any) {
+      } catch (error: unknown) {
+        const safeError = ensureError(error);
         addLog("[error] loadTokens failed", {
-          error_message: err?.message,
-          error_name: err?.name,
-          error_stack: err?.stack,
-          error_response: err?.response,
-          error_status: err?.status,
-          full_error: err,
+          error_message: safeError.message,
+          error_name: safeError.name,
+          error_stack: safeError.stack,
+          full_error: error,
         });
 
-        console.error("Failed to load tokens", err);
+        console.error("Failed to load tokens", error);
         toast.error("Failed to load tokens");
         setTokens([]);
         setExpandedTokens({});
         setCurrentPage(1);
-        throw err;
+        throw safeError;
       } finally {
         setLoadingTokens(false);
         addLog("[done] loadTokens finished");
       }
     },
-    [addLog, resetPagination],
+    [addLog, pageSize],
   );
 
   const toggleExpanded = useCallback((key: string) => {

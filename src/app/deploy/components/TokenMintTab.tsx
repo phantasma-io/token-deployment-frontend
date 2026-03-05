@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image, { type ImageLoaderProps } from "next/image";
 import {
   Token,
   EasyConnect,
@@ -28,7 +29,7 @@ import { toast } from "sonner";
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
 import { getNftId, truncateMiddle } from "../utils/nftHelpers";
 import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
-import { convertRoyaltiesPercent, type RoyaltiesConversion } from "../utils/royalties";
+import { convertRoyaltiesPercent } from "../utils/royalties";
 import { normalizeImageUrl } from "../utils/urlHelpers";
 import { formatVmTypeLabel } from "../utils/vmTypeLabel";
 import type { AddLogFn } from "../types";
@@ -64,6 +65,7 @@ const NFT_FEE_DEFAULTS = {
   maxDataLimit: DEFAULT_MAX_DATA.toString(),
 };
 const NFT_PAGE_SIZE = 10;
+const passthroughImageLoader = ({ src }: ImageLoaderProps): string => src;
 
 export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProps) {
   const [loadingToken, setLoadingToken] = useState(false);
@@ -213,7 +215,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       const schema = vmStructSchemaFromRpcResult(romResult);
       setRomSchema(schema);
       const schemaFields = schema.fields ?? [];
-      const defaultNames = new Set(nftDefaultMetadataFields.map((f: any) => f.name));
+      const defaultNames = new Set(
+        nftDefaultMetadataFields.map((field) => String(field.name)),
+      );
       const mapped: RomField[] = schemaFields
         .map((sf) => ({
           name: String(sf.name?.data ?? ""),
@@ -223,7 +227,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
         .filter((f) => !defaultNames.has(f.name) || f.name === "rom");
       setRomFields(mapped);
 
-      const standardNames = new Set(standardMetadataFields.map((f: any) => f.name));
+      const standardNames = new Set(
+        standardMetadataFields.map((field) => String(field.name)),
+      );
       const initialExtras: Record<string, string> = {};
       for (const sf of schemaFields) {
         const key = String(sf.name?.data ?? "");
@@ -495,7 +501,6 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     description,
     imageURL,
     infoURL,
-    royaltiesPercent,
     royaltiesBaseUnitsString,
     royaltiesConversion,
     romHex,
@@ -791,10 +796,14 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
                         {imagePreviewError ? (
                           <span className="text-xs text-muted-foreground">Failed to load preview</span>
                         ) : (
-                          <img
+                          <Image
+                            loader={passthroughImageLoader}
+                            unoptimized
                             src={imagePreviewUrl}
                             alt="Token preview"
-                            className="max-h-28 object-contain"
+                            width={112}
+                            height={112}
+                            className="max-h-28 w-auto object-contain"
                             onError={() => setImagePreviewError(true)}
                             onLoad={() => setImagePreviewError(false)}
                           />

@@ -1,18 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import { useTheme } from 'next-themes'
 import { Moon, Sun } from 'lucide-react'
 
+const subscribe = () => () => {}
+const getClientSnapshot = () => true
+const getServerSnapshot = () => false
+
 export function ThemeToggle() {
+  const mounted = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot)
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const activeTheme = mounted ? (resolvedTheme ?? theme) : null
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
+  if (!activeTheme) {
     return (
       <button
         className="p-2 rounded-md border"
@@ -24,8 +25,6 @@ export function ThemeToggle() {
       </button>
     )
   }
-
-  const activeTheme = resolvedTheme ?? theme
 
   return (
     <button

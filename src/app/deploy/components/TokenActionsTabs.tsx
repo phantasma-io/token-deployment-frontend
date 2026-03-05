@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import type { AddLogFn, TokenActionTab } from "../types";
+import type { AddLogFn, PhaCtxLike, TokenActionTab } from "../types";
 import { Rocket } from "lucide-react";
 
 import { TokenDeploymentForm, type TokenDeploymentFormHandle } from "./TokenDeploymentForm";
@@ -27,7 +27,7 @@ const tabs: Array<{ key: TokenActionTab; label: string }> = [
 type TokenActionsTabsProps = {
   activeTab: TokenActionTab;
   onTabChange: (tab: TokenActionTab) => void;
-  phaCtx: any;
+  phaCtx: PhaCtxLike;
   addLog: AddLogFn;
   onRefreshTokens: (ownerAddress: string) => Promise<void>;
   expandToken: (tokenKey: string) => void;

@@ -24,7 +24,7 @@ const DeployPage = observer(() => {
   const [selectedTokenKey, setSelectedTokenKey] = useState<string | null>(null);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
 
-  const addLog = useCallback((message: string, data?: any) => {
+  const addLog = useCallback((message: string, data?: unknown) => {
     const timestamp = new Date().toISOString();
     const logEntry = `[${timestamp}] ${message}${data ? "\n" + JSON.stringify(data, null, 2) : ""}`;
     console.log(message, data);
@@ -178,7 +178,7 @@ const DeployPage = observer(() => {
   useEffect(() => {
     if (activeTab === "deploy") {
       if (selectedTokenKey !== null || selectedToken !== null) {
-      addLog("[cleanup] Clearing token selection for deploy tab");
+        addLog("[cleanup] Clearing token selection for deploy tab");
       }
       if (selectedTokenKey !== null) {
         setSelectedTokenKey(null);

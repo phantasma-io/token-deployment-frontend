@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image, { type ImageLoaderProps } from "next/image";
 import {
   CreateSeriesFeeOptions,
   EasyConnect,
@@ -48,6 +49,7 @@ const SERIES_FEE_DEFAULTS = {
   feeMultiplier: "10000",
   maxDataLimit: DEFAULT_SERIES_MAX_DATA.toString(),
 };
+const passthroughImageLoader = ({ src }: ImageLoaderProps): string => src;
 
 export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTabProps) {
   const [loading, setLoading] = useState(false);
@@ -178,7 +180,9 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       const schema = vmStructSchemaFromRpcResult(rpcSeries);
       setSeriesSchema(schema);
       const schemaFields = schema.fields ?? [];
-      const defaultNames = new Set(seriesDefaultMetadataFields.map((f: any) => f.name));
+      const defaultNames = new Set(
+        seriesDefaultMetadataFields.map((field) => String(field.name)),
+      );
       const mapped: SeriesField[] = schemaFields
         .map((sf) => ({
           name: String(sf.name?.data ?? ""),
@@ -190,10 +194,19 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       setSeriesFields(mapped);
       // initialize extra values strictly per schema
       const initial: Record<string, string> = {};
-      const standardNames = new Set(standardMetadataFields.map((f: any) => f.name));
+      const standardNames = new Set(
+        standardMetadataFields.map((field) => String(field.name)),
+      );
       for (const sf of schemaFields) {
         const k = String(sf.name?.data ?? "");
-        if (!k || k === "rom" || seriesDefaultMetadataFields.some((f: any) => f.name === k) || standardNames.has(k)) continue;
+        if (
+          !k ||
+          k === "rom" ||
+          seriesDefaultMetadataFields.some((field) => String(field.name) === k) ||
+          standardNames.has(k)
+        ) {
+          continue;
+        }
         initial[k] = "";
       }
       setExtraValues(initial);
@@ -419,7 +432,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     description,
     imageURL,
     infoURL,
-    royaltiesPercent,
     royaltiesBaseUnitsString,
     romHex,
     gasFeeBase,
@@ -512,10 +524,14 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
                         {imagePreviewError ? (
                           <span className="text-xs text-muted-foreground">Failed to load preview</span>
                         ) : (
-                          <img
+                          <Image
+                            loader={passthroughImageLoader}
+                            unoptimized
                             src={imagePreviewUrl}
                             alt="Series preview"
-                            className="max-h-28 object-contain"
+                            width={112}
+                            height={112}
+                            className="max-h-28 w-auto object-contain"
                             onError={() => setImagePreviewError(true)}
                             onLoad={() => setImagePreviewError(false)}
                           />

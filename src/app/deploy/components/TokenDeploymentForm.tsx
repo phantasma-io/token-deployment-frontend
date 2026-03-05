@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import Image, { type ImageLoaderProps } from "next/image";
 import { toast } from "sonner";
 import {
   Upload,
@@ -21,14 +22,15 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { deployCarbonToken } from "@/lib/phantasmaClient";
+import { ensureError } from "@/lib/phantasma/errors";
 import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuilder";
 import { parseHumanAmountToBaseUnits, INTX_MAX_VALUE } from "../utils/decimalUnits";
 import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
-import type { AddLogFn } from "../types";
+import type { AddLogFn, PhaCtxLike } from "../types";
 
 type TokenDeploymentFormProps = {
-  phaCtx: any;
+  phaCtx: PhaCtxLike;
   addLog: AddLogFn;
   onRefreshTokens: (ownerAddress: string) => Promise<void>;
   expandToken: (tokenKey: string) => void;
@@ -87,6 +89,7 @@ const MAX_ICON_BASE64_PAYLOAD_CHARS = 30000;
 const MAX_ICON_BINARY_BYTES = Math.floor((MAX_ICON_BASE64_PAYLOAD_CHARS / 4) * 3);
 const ICON_SIZE_LIMIT_LABEL = formatBytes(MAX_ICON_BINARY_BYTES);
 const ICON_PAYLOAD_LIMIT_LABEL = MAX_ICON_BASE64_PAYLOAD_CHARS.toLocaleString();
+const passthroughImageLoader = ({ src }: ImageLoaderProps): string => src;
 
 type IconValidationResult =
   | {
@@ -140,8 +143,7 @@ function validateIconDataUri(dataUri: string): IconValidationResult {
 
   try {
     // Ensure base64 payload decodes successfully.
-    // eslint-disable-next-line no-unused-vars
-    const _decoded = atob(base64Payload);
+    atob(base64Payload);
   } catch {
     return {
       ok: false,
@@ -458,8 +460,8 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       try {
         // Let SDK parse/validate JSON
         TokenSchemasBuilder.fromJson(js);
-      } catch (e: any) {
-        const msg = e?.message ?? String(e);
+      } catch (error: unknown) {
+        const msg = ensureError(error).message;
         addLog("[error] Token schemas JSON invalid", { error: msg });
         toast.error(`Invalid token schemas: ${msg}`);
         return;
@@ -605,15 +607,16 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       expandToken(trimmedSymbol);
       resetForm();
       addLog("[success] Deploy process completed");
-    } catch (err: any) {
-      const message = err?.message ?? String(err);
+    } catch (error: unknown) {
+      const safeError = ensureError(error);
+      const message = safeError.message;
       addLog("[error] Deploy exception", {
         error_message: message,
-        error_name: err?.name,
-        error_stack: err?.stack,
-        full_error: err,
+        error_name: safeError.name,
+        error_stack: safeError.stack,
+        full_error: error,
       });
-      console.error("Deploy exception", err);
+      console.error("Deploy exception", error);
       toast.error("Deploy error: " + message);
       setTxStatus({ kind: "failure", message });
     } finally {
@@ -643,6 +646,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
     resetForm,
     trimmedSymbol,
     symbolValidation,
+    decimalsValidation,
     tokenUrl,
     walletAddress,
     tokenSchemasJson,
@@ -830,10 +834,14 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Preview</div>
                   <div className="flex h-32 items-center justify-center rounded border bg-muted/30 p-2">
-                    <img
+                    <Image
+                      loader={passthroughImageLoader}
+                      unoptimized
                       src={iconDataUri}
                       alt="Token icon preview"
-                      className="max-h-28 object-contain"
+                      width={112}
+                      height={112}
+                      className="max-h-28 w-auto object-contain"
                     />
                   </div>
                 </div>

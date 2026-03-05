@@ -181,7 +181,7 @@ export async function listAccountNfts(params: ListAccountNftsParams): Promise<Li
   try {
     const response: CursorPaginatedResult<NFT[]> = await api.getAccountNFTs(
       account,
-      "",
+      tokenSymbol,
       carbonTokenId,
       carbonSeriesId,
       pageSize,
