@@ -1,10 +1,10 @@
 "use client";
 
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image, { type ImageLoaderProps } from "next/image";
 import {
   CreateSeriesFeeOptions,
-  EasyConnect,
   Token,
   VmStructSchema,
   VmStructSchemaResult,
@@ -20,7 +20,7 @@ import { Loader2, Rocket, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { getTokenPrimary, isTokenNFT } from "../utils/tokenHelpers";
-import { isHexValueValid, isVmValueValid } from "../utils/vmValidation";
+import { isVmValueValid } from "../utils/vmValidation";
 import { convertRoyaltiesPercent } from "../utils/royalties";
 import { normalizeImageUrl } from "../utils/urlHelpers";
 import { formatVmTypeLabel } from "../utils/vmTypeLabel";
@@ -30,13 +30,9 @@ import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 import type { AddLogFn } from "../types";
 import { createSeries, getTokenExtended } from "@/lib/phantasmaClient";
 
-type PhaCtxMinimal = {
-  conn?: EasyConnect | null;
-};
-
 type TokenSeriesTabProps = {
   selectedToken: Token | null;
-  phaCtx: PhaCtxMinimal;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
 };
 
@@ -65,7 +61,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
   const [infoURL, setInfoURL] = useState("");
   const [royaltiesPercent, setRoyaltiesPercent] = useState("");
   const [imagePreviewError, setImagePreviewError] = useState(false);
-  const [romHex, setRomHex] = useState("0x"); // use 0x to indicate empty ROM by default
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -96,7 +91,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     setImageURL("");
     setInfoURL("");
     setRoyaltiesPercent("");
-    setRomHex("0x");
     setGasFeeBase(SERIES_FEE_DEFAULTS.gasFeeBase);
     setGasFeeCreateSeriesBase(SERIES_FEE_DEFAULTS.gasFeeCreateSeriesBase);
     setFeeMultiplier(SERIES_FEE_DEFAULTS.feeMultiplier);
@@ -238,7 +232,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       imageURL: has("imageURL"),
       infoURL: has("infoURL"),
       royalties: has("royalties"),
-      rom: seriesFields.some((f) => f.name === "rom"),
     };
   }, [seriesFields]);
 
@@ -258,8 +251,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     royaltiesConversion.kind === "ok" ? royaltiesConversion.baseUnits.toString() : "";
   const seriesRoyaltiesInvalid =
     visibleStandard.royalties && royaltiesPercent.trim().length > 0 && royaltiesConversion.kind === "error";
-  const seriesRomInvalid =
-    visibleStandard.rom && romHex.trim().length > 0 && !isHexValueValid(romHex);
 
   const formValid = useMemo(() => {
     if (!canSign || !isNft || !selectedToken || !carbonId || !seriesSchema) return false;
@@ -270,7 +261,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     if (visibleStandard.infoURL && !infoURL.trim()) return false;
     if (visibleStandard.royalties && royaltiesConversion.kind !== "ok") return false;
     // All custom fields must be non-empty
-    if (visibleStandard.rom && !isHexValueValid(romHex)) return false;
 
     const fields = seriesSchema.fields ?? [];
     for (const field of fields) {
@@ -315,14 +305,14 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     infoURL,
     royaltiesConversion,
     royaltiesBaseUnitsString,
-    romHex,
     extraValues,
     schemaFieldMap,
   ]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedToken?.symbol || !carbonId) return;
-    if (!phaCtx?.conn) {
+    const conn = phaCtx.conn;
+    if (!conn) {
       setSubmitError("Wallet is not connected");
       return;
     }
@@ -399,11 +389,10 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
       });
 
       const res = await createSeries({
-        conn: phaCtx.conn as EasyConnect,
+        conn,
         carbonTokenId: carbonId,
         seriesSchema: schema,
         seriesValues: values,
-        romHex: visibleStandard.rom ? romHex.trim() : undefined,
         feeOptions,
         maxData: maxDataValue,
         addLog,
@@ -427,13 +416,11 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
     selectedToken?.symbol,
     carbonId,
     phaCtx?.conn,
-    visibleStandard,
     name,
     description,
     imageURL,
     infoURL,
     royaltiesBaseUnitsString,
-    romHex,
     gasFeeBase,
     gasFeeCreateSeriesBase,
     feeMultiplier,
@@ -624,20 +611,6 @@ export function TokenSeriesTab({ selectedToken, phaCtx, addLog }: TokenSeriesTab
                   </div>
                 );
               })}
-              {visibleStandard.rom && (
-                <div className="space-y-1 sm:col-span-2">
-                  <div className="text-xs font-medium">ROM (hex)
-                    <span className="text-muted-foreground"> — use 0x for empty</span>
-                  </div>
-                  <input
-                    className={`w-full rounded border px-2 py-1 font-mono${seriesRomInvalid ? " border-red-500 focus-visible:ring-red-500" : ""}`}
-                    value={romHex}
-                    onChange={(e) => setRomHex(e.target.value)}
-                    placeholder="0x…"
-                    required
-                  />
-                </div>
-              )}
             </div>
 
             <div className="rounded-lg border p-3">

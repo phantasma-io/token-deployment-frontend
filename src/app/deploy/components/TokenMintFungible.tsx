@@ -1,7 +1,8 @@
 "use client";
 
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Address, EasyConnect, FeeOptions, Token } from "phantasma-sdk-ts";
+import { Address, FeeOptions, Token } from "phantasma-sdk-ts";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,10 +16,6 @@ import { formatBaseUnitsToDecimal, parseHumanAmountToBaseUnits, INTX_MAX_VALUE }
 import { parseBigIntInput } from "../utils/bigintInputs";
 import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
-type PhaCtxMinimal = {
-  conn?: EasyConnect | null;
-};
-
 type TokenSnapshot = {
   symbol: string;
   carbonId: bigint | null;
@@ -29,7 +26,7 @@ type TokenSnapshot = {
 
 type TokenMintFungibleProps = {
   selectedToken: Token;
-  phaCtx: PhaCtxMinimal;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
 };
 
@@ -263,7 +260,8 @@ export function TokenMintFungible({ selectedToken, phaCtx, addLog }: TokenMintFu
     !minting;
 
   const handleMint = useCallback(async () => {
-    if (!canMint || !phaCtx?.conn || carbonTokenId === null || amountBaseUnits === null) {
+    const conn = phaCtx.conn;
+    if (!canMint || !conn || carbonTokenId === null || amountBaseUnits === null) {
       return;
     }
     setMinting(true);
@@ -298,7 +296,7 @@ export function TokenMintFungible({ selectedToken, phaCtx, addLog }: TokenMintFu
     });
     try {
       const res = await mintFungible({
-        conn: phaCtx.conn,
+        conn,
         carbonTokenId,
         destinationAddress: destination,
         amount: amountBaseUnits,

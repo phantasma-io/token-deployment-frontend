@@ -4,12 +4,14 @@ import {
   CarbonBinaryWriter,
   EasyConnect,
   FeeOptions,
+  hexToBytes,
   IntX,
   MintNftFeeOptions,
-  MintNonFungibleTxHelper,
+  MintPhantasmaNonFungibleTxHelper,
   MetadataField,
-  NftRomBuilder,
+  PhantasmaNftRomBuilder,
   SmallString,
+  TokenHelper,
   TransactionData,
   TxMsg,
   TxMsgMintFungible,
@@ -18,7 +20,6 @@ import {
   VmNamedDynamicVariable,
   VmStructSchema,
   VmType,
-  getRandomPhantasmaId,
 } from "phantasma-sdk-ts";
 
 import { createApi } from "./api";
@@ -30,7 +31,7 @@ import { parseHexBytes, parseVmMetadataValue } from "./metadata";
 export type MintNftParams = {
   conn: EasyConnect;
   carbonTokenId: bigint;
-  carbonSeriesId: number;
+  phantasmaSeriesId: bigint;
   romSchema: VmStructSchema;
   metadataValues: Record<string, string>;
   romHex: string;
@@ -47,16 +48,30 @@ export type MintNftResult =
       success: true;
       txHash: string;
       carbonNftAddresses?: string[];
-      phantasmaNftId: string;
+      phantasmaNftId?: string;
       result?: unknown;
     }
   | { success: false; error: string };
+
+function bytes32HexToRpcDecimal(hex: string): string | undefined {
+  if (hex.length === 0) {
+    return undefined;
+  }
+
+  // RPC/public read paths interpret the raw Bytes32 `_i` word as an unsigned little-endian integer.
+  const littleEndianHex = Array.from(hexToBytes(hex))
+    .reverse()
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return BigInt(`0x${littleEndianHex}`).toString();
+}
 
 export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
   const {
     conn,
     carbonTokenId,
-    carbonSeriesId,
+    phantasmaSeriesId,
     romSchema,
     metadataValues,
     romHex,
@@ -81,8 +96,14 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
   } catch (err: unknown) {
     return { success: false, error: toMessage(err) };
   }
+  if (romBytes.length > 0) {
+    return {
+      success: false,
+      error: "Deterministic NFT mint does not accept explicit 'rom' bytes; use metadata fields only",
+    };
+  }
 
-  const metadata: MetadataField[] = [{ name: "rom", value: romBytes }];
+  const metadata: MetadataField[] = [];
   const schemaFields = romSchema.fields ?? [];
 
   for (const field of schemaFields) {
@@ -145,11 +166,9 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
     ram_keys: ramFieldNames,
   });
 
-  const phantasmaNftId = await getRandomPhantasmaId();
-
   let romPayload: Uint8Array;
   try {
-    romPayload = NftRomBuilder.buildAndSerialize(romSchema, phantasmaNftId, metadata);
+    romPayload = PhantasmaNftRomBuilder.buildAndSerialize(romSchema, metadata);
   } catch (err: unknown) {
     return { success: false, error: `Failed to serialize ROM metadata: ${toMessage(err)}` };
   }
@@ -164,9 +183,9 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
 
   let txMsg;
   try {
-    txMsg = MintNonFungibleTxHelper.buildTx(
+    txMsg = MintPhantasmaNonFungibleTxHelper.buildTx(
       carbonTokenId,
-      Number(carbonSeriesId),
+      phantasmaSeriesId,
       senderPk,
       receiverPk,
       romPayload,
@@ -179,7 +198,10 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
     return { success: false, error: `Failed to build mint transaction: ${toMessage(err)}` };
   }
 
-  addLog?.("[mint] Requesting wallet signature", { carbonSeriesId, carbonTokenId: String(carbonTokenId) });
+  addLog?.("[mint] Requesting wallet signature", {
+    carbonTokenId: String(carbonTokenId),
+    phantasmaSeriesId: phantasmaSeriesId.toString(),
+  });
 
   let walletResult: { hash: string; id: number; success: boolean };
   try {
@@ -208,6 +230,7 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
 
   const txHash = walletResult.hash;
   let carbonNftAddresses: string[] | undefined;
+  let mintedPhantasmaNftId: string | undefined;
 
   if (txHash) {
     const api = createApi();
@@ -221,13 +244,15 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
       const txInfo = (confirmation as { status: "success"; tx: TransactionData }).tx;
       if (typeof txInfo?.result === "string") {
         try {
-      const parsed = MintNonFungibleTxHelper.parseResult(
-        carbonTokenId,
-        txInfo.result,
-      );
-          carbonNftAddresses = parsed.map((addr) => addr?.ToHex?.() ?? "");
+          const parsed = MintPhantasmaNonFungibleTxHelper.parseResult(txInfo.result);
+          carbonNftAddresses = parsed.map((entry) =>
+            TokenHelper.getNftAddress(carbonTokenId, entry.carbonInstanceId)?.ToHex?.() ?? "",
+          );
+          const mintedIdHex = parsed[0]?.phantasmaNftId?.ToHex?.() ?? "";
+          mintedPhantasmaNftId = bytes32HexToRpcDecimal(mintedIdHex);
         } catch {
           carbonNftAddresses = undefined;
+          mintedPhantasmaNftId = undefined;
         }
       }
     } else if (confirmation.status === "failure") {
@@ -244,14 +269,14 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
   addLog?.("[mint] Mint transaction submitted", {
     txHash,
     carbonNftAddresses,
-    phantasmaNftId: phantasmaNftId.toString(),
+    phantasmaNftId: mintedPhantasmaNftId,
   });
 
   return {
     success: true,
     txHash: txHash || "pending",
     carbonNftAddresses,
-    phantasmaNftId: phantasmaNftId.toString(),
+    phantasmaNftId: mintedPhantasmaNftId,
     result: walletResult,
   };
 }

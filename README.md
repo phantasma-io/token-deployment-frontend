@@ -10,7 +10,7 @@ Built with **Next.js (App Router)** and **@phantasma/connect-react** so dApps ca
 | Framework           | Next.js 15 (App Router, TypeScript)      | Turbopack dev/build; deployment is SSR-friendly. |
 | UI Toolkit          | Tailwind utility classes + custom cards  | Minimal, no CSS-in-JS. |
 | Wallet Integration  | `@phantasma/connect-react`               | Provides `PhaConnectState`, `PhaAccountWidgetV1`, and Link/socket handling. |
-| Phantasma SDK       | `phantasma-sdk-ts` (local `file:` dependency) | We copy the SDK into `node_modules/phantasma-sdk-ts` so the frontend uses the latest Carbon helpers. |
+| Phantasma SDK       | `phantasma-sdk-ts` `^0.5.0`              | Uses the published package with Carbon deterministic NFT mint helpers. |
 | Toasts/Alerts       | `sonner`                                 | Non-blocking notification stack. |
 
 ## Project Layout

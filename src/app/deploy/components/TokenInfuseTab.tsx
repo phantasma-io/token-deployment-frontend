@@ -1,7 +1,8 @@
 "use client";
 
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { EasyConnect, NFT, Token, FeeOptions, TokenHelper, hexToBytes } from "phantasma-sdk-ts";
+import { NFT, Token, FeeOptions, TokenHelper, hexToBytes } from "phantasma-sdk-ts";
 import { Loader2, Sparkles, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,13 +32,9 @@ import { NftPreviewCard } from "./NftPreviewCard";
 import { parseBigIntInput } from "../utils/bigintInputs";
 import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
-type PhaCtxMinimal = {
-  conn?: EasyConnect | null;
-};
-
 type TokenInfuseTabProps = {
   selectedToken: Token | null;
-  phaCtx: PhaCtxMinimal;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
 };
 

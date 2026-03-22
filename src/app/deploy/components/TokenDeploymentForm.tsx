@@ -1,3 +1,4 @@
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import Image, { type ImageLoaderProps } from "next/image";
 import { toast } from "sonner";
@@ -27,10 +28,10 @@ import { TokenSchemasBuilder as TokenSchemasBuilderUI } from "./TokenSchemasBuil
 import { parseHumanAmountToBaseUnits, INTX_MAX_VALUE } from "../utils/decimalUnits";
 import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 
-import type { AddLogFn, PhaCtxLike } from "../types";
+import type { AddLogFn } from "../types";
 
 type TokenDeploymentFormProps = {
-  phaCtx: PhaCtxLike;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
   onRefreshTokens: (ownerAddress: string) => Promise<void>;
   expandToken: (tokenKey: string) => void;
@@ -398,7 +399,8 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       owner_address: walletAddress,
     });
 
-    if (!phaCtx?.conn) {
+    const conn = phaCtx.conn;
+    if (!conn) {
       addLog("[error] No wallet connection");
       toast.error("Connect wallet first");
       return;
@@ -562,7 +564,7 @@ export const TokenDeploymentForm = forwardRef<TokenDeploymentFormHandle, TokenDe
       });
 
       const res = await deployCarbonToken({
-        conn: phaCtx.conn,
+        conn,
         ownerAddress,
         symbol: trimmedSymbol,
         name: name.trim(),

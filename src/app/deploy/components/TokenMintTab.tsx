@@ -1,10 +1,10 @@
 "use client";
 
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image, { type ImageLoaderProps } from "next/image";
 import {
   Token,
-  EasyConnect,
   VmStructSchema,
   VmStructSchemaResult,
   vmStructSchemaFromRpcResult,
@@ -45,23 +45,19 @@ import { parseBigIntInput } from "../utils/bigintInputs";
 import { formatKcalAmount, formatSoulAmount } from "../utils/feeFormatting";
 import { TokenMintFungible } from "./TokenMintFungible";
 
-type PhaCtxMinimal = {
-  conn?: EasyConnect | null;
-};
-
 type TokenMintTabProps = {
   selectedToken: Token | null;
-  phaCtx: PhaCtxMinimal;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
 };
 
 type RomField = { name: string; type: VmType };
 
 const DEFAULT_ROM_HEX = "0x";
-const DEFAULT_MAX_DATA = 100n;
+const DEFAULT_MAX_DATA = 100000000n;
 const NFT_FEE_DEFAULTS = {
   gasFeeBase: "10000",
-  feeMultiplier: "1000",
+  feeMultiplier: "10000",
   maxDataLimit: DEFAULT_MAX_DATA.toString(),
 };
 const NFT_PAGE_SIZE = 10;
@@ -224,7 +220,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
           type: sf.schema?.type as VmType,
         }))
         .filter((f) => !!f.name)
-        .filter((f) => !defaultNames.has(f.name) || f.name === "rom");
+        .filter((f) => !defaultNames.has(f.name));
       setRomFields(mapped);
 
       const standardNames = new Set(
@@ -512,7 +508,8 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
   ]);
 
   const handleMint = useCallback(async () => {
-    if (!phaCtx?.conn || !selectedToken?.symbol || !carbonId || !selectedSeriesId || !romSchema) {
+    const conn = phaCtx.conn;
+    if (!conn || !selectedToken?.symbol || !carbonId || !selectedSeriesId || !romSchema) {
       return;
     }
     setSubmitting(true);
@@ -579,11 +576,23 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       }
 
       const feeOptions = new MintNftFeeOptions(gasFeeBaseValue, feeMultiplierValue);
+      const selectedSeries = seriesList.find((entry) => entry.carbonSeriesId === selectedSeriesId);
+      if (!selectedSeries) {
+        throw new Error(`Selected series ${selectedSeriesId} is not available`);
+      }
+
+      let phantasmaSeriesId: bigint;
+      try {
+        phantasmaSeriesId = BigInt(selectedSeries.seriesId);
+      } catch {
+        throw new Error(`Selected series ${selectedSeriesId} has invalid phantasma series id '${selectedSeries.seriesId}'`);
+      }
 
       addLog("[mint] Submitting mint request", {
         symbol: selectedToken.symbol,
         carbonTokenId: String(carbonId),
-        seriesId: selectedSeriesId,
+        carbonSeriesId: selectedSeriesId,
+        phantasmaSeriesId: phantasmaSeriesId.toString(),
         metadataKeys: Object.keys(metadata),
         ramKeys: shouldSendRam ? Object.keys(ramInputValues) : [],
         fees: {
@@ -594,9 +603,9 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
       });
 
       const res = await mintNft({
-        conn: phaCtx.conn as EasyConnect,
+        conn,
         carbonTokenId: carbonId,
-        carbonSeriesId: selectedSeriesId,
+        phantasmaSeriesId,
         romSchema,
         metadataValues: metadata,
         romHex: romHex.trim(),
@@ -647,6 +656,7 @@ export function TokenMintTab({ selectedToken, phaCtx, addLog }: TokenMintTabProp
     gasFeeBase,
     feeMultiplier,
     maxDataLimit,
+    seriesList,
     addLog,
     resetInputs,
     loadSeriesNfts,

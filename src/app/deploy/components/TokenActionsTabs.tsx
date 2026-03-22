@@ -1,3 +1,4 @@
+import type { PhaConnectState } from "@phantasma/connect-react";
 import { useRef } from "react";
 import type { Token } from "phantasma-sdk-ts";
 
@@ -9,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import type { AddLogFn, PhaCtxLike, TokenActionTab } from "../types";
+import type { AddLogFn, TokenActionTab } from "../types";
 import { Rocket } from "lucide-react";
 
 import { TokenDeploymentForm, type TokenDeploymentFormHandle } from "./TokenDeploymentForm";
@@ -27,7 +28,7 @@ const tabs: Array<{ key: TokenActionTab; label: string }> = [
 type TokenActionsTabsProps = {
   activeTab: TokenActionTab;
   onTabChange: (tab: TokenActionTab) => void;
-  phaCtx: PhaCtxLike;
+  phaCtx: PhaConnectState;
   addLog: AddLogFn;
   onRefreshTokens: (ownerAddress: string) => Promise<void>;
   expandToken: (tokenKey: string) => void;
