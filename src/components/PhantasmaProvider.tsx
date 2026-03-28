@@ -1,7 +1,9 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useLayoutEffect, useState } from "react";
 import { PhaConnectCtx, PhaConnectState } from "@phantasma/connect-react";
+
+import { readStoredConnectTransportMode } from "@/lib/phantasma/connectTransportMode";
 
 // Provider component
 interface PhantasmaProviderProps {
@@ -9,7 +11,19 @@ interface PhantasmaProviderProps {
 }
 
 export function PhantasmaProvider({ children }: PhantasmaProviderProps) {
-  const phaConnectState = new PhaConnectState();
+  const [phaConnectState] = useState(
+    () =>
+      new PhaConnectState({
+        transportMode: "auto",
+      }),
+  );
+
+  useLayoutEffect(() => {
+    // Restore runs inside the account widget on mount. Load the user's saved
+    // transport preference first so explicit `I` / `S` modes can suppress
+    // auto-restore before that effect fires.
+    phaConnectState.set_transport_mode(readStoredConnectTransportMode());
+  }, [phaConnectState]);
 
   return (
     <PhaConnectCtx.Provider value={phaConnectState}>
