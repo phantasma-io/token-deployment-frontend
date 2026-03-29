@@ -41,6 +41,14 @@ const TRANSPORT_MODE_OPTIONS: Array<{
   { value: "local-socket", buttonLabel: "S", menuLabel: "Local socket transport" },
 ];
 
+function supportsTokenSelection(tab: TokenActionTab) {
+  return tab !== "deploy";
+}
+
+function isNftOnlyTab(tab: TokenActionTab) {
+  return tab === "series" || tab === "infuse";
+}
+
 const DeployPage = observer(() => {
   const phaCtx = useContext(PhaConnectCtx);
 
@@ -79,14 +87,16 @@ const DeployPage = observer(() => {
   const selectedTransportModeOption =
     TRANSPORT_MODE_OPTIONS.find((option) => option.value === selectedTransportMode) ??
     TRANSPORT_MODE_OPTIONS[0];
+  const tokenSelectionEnabled = supportsTokenSelection(activeTab);
+  const nftOnlyTab = isNftOnlyTab(activeTab);
   const isTokenSelectable = useCallback(
     (token: Token) => {
-      if (activeTab === "series" || activeTab === "infuse") {
+      if (nftOnlyTab) {
         return isTokenNFT(token);
       }
       return true;
     },
-    [activeTab],
+    [nftOnlyTab],
   );
 
   // Track connect-react state transitions so wallet-link failures show up in the on-page logger.
@@ -209,7 +219,7 @@ const DeployPage = observer(() => {
 
   const handleSelectToken = useCallback(
     (token: Token, key: string) => {
-      if ((activeTab === "series" || activeTab === "infuse") && !isTokenNFT(token)) {
+      if (isNftOnlyTab(activeTab) && !isTokenNFT(token)) {
         addLog("[warn] Ignoring selection of fungible token in NFT-only tab", {
           key,
           symbol: token?.symbol,
@@ -256,7 +266,7 @@ const DeployPage = observer(() => {
       return;
     }
 
-    if ((activeTab === "series" || activeTab === "infuse") && match && !isTokenNFT(match)) {
+    if (nftOnlyTab && match && !isTokenNFT(match)) {
       if (selectedTokenKey !== null) {
         setSelectedTokenKey(null);
       }
@@ -269,12 +279,14 @@ const DeployPage = observer(() => {
     if (selectedToken !== match) {
       setSelectedToken(match);
     }
-  }, [tokens, selectedTokenKey, selectedToken, activeTab]);
+  }, [tokens, selectedTokenKey, selectedToken, nftOnlyTab]);
 
   useEffect(() => {
-    if (activeTab === "deploy") {
+    if (!tokenSelectionEnabled) {
       if (selectedTokenKey !== null || selectedToken !== null) {
-        addLog("[cleanup] Clearing token selection for deploy tab");
+        addLog("[cleanup] Clearing token selection for non-token-action tab", {
+          tab: activeTab,
+        });
       }
       if (selectedTokenKey !== null) {
         setSelectedTokenKey(null);
@@ -285,11 +297,7 @@ const DeployPage = observer(() => {
       return;
     }
 
-    if (
-      (activeTab === "series" || activeTab === "infuse") &&
-      selectedToken &&
-      !isTokenNFT(selectedToken)
-    ) {
+    if (nftOnlyTab && selectedToken && !isTokenNFT(selectedToken)) {
       addLog("[warn] NFT-only tab, clearing fungible selection", {
         symbol: selectedToken.symbol,
         tab: activeTab,
@@ -297,7 +305,7 @@ const DeployPage = observer(() => {
       setSelectedToken(null);
       setSelectedTokenKey(null);
     }
-  }, [activeTab, selectedTokenKey, selectedToken, addLog]);
+  }, [activeTab, tokenSelectionEnabled, nftOnlyTab, selectedTokenKey, selectedToken, addLog]);
 
   const handleTabChange = useCallback(
     (tab: TokenActionTab) => {
@@ -323,10 +331,10 @@ const DeployPage = observer(() => {
               PHANTASMA NETWORK
             </div>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              Token Deployment
+              Deployment Studio
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Deploy new Carbon tokens on Phantasma blockchain
+              Deploy Carbon tokens and pre-compiled Phantasma contracts
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -378,10 +386,10 @@ const DeployPage = observer(() => {
             expandedTokens={expandedTokens}
             onRefresh={handleRefreshTokens}
             hasWalletAddress={!!walletAddress}
-            canSelectToken={activeTab !== "deploy"}
-            selectedTokenKey={activeTab === "deploy" ? null : selectedTokenKey}
+            canSelectToken={tokenSelectionEnabled}
+            selectedTokenKey={tokenSelectionEnabled ? selectedTokenKey : null}
             onSelectToken={handleSelectToken}
-            isTokenSelectable={activeTab !== "deploy" ? isTokenSelectable : undefined}
+            isTokenSelectable={tokenSelectionEnabled ? isTokenSelectable : undefined}
             selectionDisabledMessage={
               activeTab === "series"
                 ? "Series can only be created for NFT tokens"
@@ -397,7 +405,7 @@ const DeployPage = observer(() => {
             addLog={addLog}
             onRefreshTokens={refreshTokens}
             expandToken={expandToken}
-            selectedToken={activeTab === "deploy" ? null : selectedToken}
+            selectedToken={tokenSelectionEnabled ? selectedToken : null}
           />
         </div>
 

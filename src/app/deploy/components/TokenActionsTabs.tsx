@@ -11,15 +11,17 @@ import {
 } from "@/components/ui/card";
 
 import type { AddLogFn, TokenActionTab } from "../types";
-import { Rocket } from "lucide-react";
+import { FileCode2, Rocket } from "lucide-react";
 
 import { TokenDeploymentForm, type TokenDeploymentFormHandle } from "./TokenDeploymentForm";
 import { TokenSeriesTab } from "./TokenSeriesTab";
 import { TokenMintTab } from "./TokenMintTab";
 import { TokenInfuseTab } from "./TokenInfuseTab";
+import { ContractLifecycleTab } from "./ContractLifecycleTab";
 
 const tabs: Array<{ key: TokenActionTab; label: string }> = [
-  { key: "deploy", label: "Deploy" },
+  { key: "deploy", label: "Token" },
+  { key: "contract", label: "Contract" },
   { key: "series", label: "Series" },
   { key: "mint", label: "Mint" },
   { key: "infuse", label: "Infuse" },
@@ -67,7 +69,7 @@ export function TokenActionsTabs({
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Rocket size={18} />
-                Deploy New Token
+                Token Deployment
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Create a new Carbon token on Phantasma blockchain
@@ -91,6 +93,24 @@ export function TokenActionsTabs({
 
       {activeTab === "series" && (
         <TokenSeriesTab selectedToken={selectedToken} phaCtx={phaCtx} addLog={addLog} />
+      )}
+
+      {activeTab === "contract" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileCode2 size={18} />
+              Contract Lifecycle
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ContractLifecycleTab
+              phaCtx={phaCtx}
+              addLog={addLog}
+              selectedToken={selectedToken}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === "mint" && (
