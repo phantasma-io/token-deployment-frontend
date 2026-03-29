@@ -1,6 +1,15 @@
-import { Address, EasyConnect } from "phantasma-sdk-ts";
+import { Address } from "phantasma-sdk-ts";
 
-export function extractPublicKeyBytes(conn: EasyConnect): Uint8Array {
+export type WalletConnection = {
+  link?: {
+    account?: {
+      address?: string;
+    };
+  };
+  signCarbonTransaction?: unknown;
+};
+
+export function extractPublicKeyBytes(conn: WalletConnection): Uint8Array {
   const addressText = conn?.link?.account?.address;
   if (!addressText || typeof addressText !== "string") {
     throw new Error(
@@ -33,4 +42,14 @@ export function isWalletSignResult(x: unknown): x is WalletSignResult {
   if (!x || typeof x !== "object") return false;
   const v = x as Record<string, unknown>;
   return typeof v.hash === "string" && typeof v.id === "number" && typeof v.success === "boolean";
+}
+
+export function requireSignCarbonTransaction(
+  conn: WalletConnection,
+): (...args: unknown[]) => void {
+  if (typeof conn.signCarbonTransaction !== "function") {
+    throw new Error("Wallet does not support Carbon transaction signing");
+  }
+
+  return conn.signCarbonTransaction as (...args: unknown[]) => void;
 }

@@ -2,7 +2,6 @@ import {
   Bytes32,
   CreateTokenFeeOptions,
   CreateTokenTxHelper,
-  EasyConnect,
   IntX,
   TokenInfo as DeploymentTokenInfo,
   TokenInfoBuilder,
@@ -15,10 +14,15 @@ import {
 import { createApi } from "./api";
 import { ensureError, toMessage } from "./errors";
 import { waitForTransactionConfirmation } from "./tx";
-import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
+import {
+  extractPublicKeyBytes,
+  isWalletSignResult,
+  requireSignCarbonTransaction,
+  type WalletConnection,
+} from "./wallet";
 
 export type DeployParams = {
-  conn: EasyConnect; // wallet connection object (phaCtx.conn)
+  conn: WalletConnection; // wallet connection object (phaCtx.conn)
   ownerAddress: string;
   symbol: string;
   name?: string;
@@ -136,7 +140,8 @@ export async function deployCarbonToken(
   try {
     walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
       try {
-        conn.signCarbonTransaction(
+        const signCarbonTransaction = requireSignCarbonTransaction(conn);
+        signCarbonTransaction(
           txMsg,
           (res: unknown) => {
             if (!isWalletSignResult(res)) {

@@ -2,7 +2,6 @@ import {
   Address,
   Bytes32,
   CarbonBinaryWriter,
-  EasyConnect,
   FeeOptions,
   hexToBytes,
   IntX,
@@ -25,11 +24,16 @@ import {
 import { createApi } from "./api";
 import { ensureError, toMessage } from "./errors";
 import { waitForTransactionConfirmation } from "./tx";
-import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
+import {
+  extractPublicKeyBytes,
+  isWalletSignResult,
+  requireSignCarbonTransaction,
+  type WalletConnection,
+} from "./wallet";
 import { parseHexBytes, parseVmMetadataValue } from "./metadata";
 
 export type MintNftParams = {
-  conn: EasyConnect;
+  conn: WalletConnection;
   carbonTokenId: bigint;
   phantasmaSeriesId: bigint;
   romSchema: VmStructSchema;
@@ -206,7 +210,8 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
   let walletResult: { hash: string; id: number; success: boolean };
   try {
     walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
-      conn.signCarbonTransaction(
+      const signCarbonTransaction = requireSignCarbonTransaction(conn);
+      signCarbonTransaction(
         txMsg,
         (res: unknown) => {
           if (!isWalletSignResult(res)) {
@@ -282,7 +287,7 @@ export async function mintNft(params: MintNftParams): Promise<MintNftResult> {
 }
 
 export type MintFungibleParams = {
-  conn: EasyConnect;
+  conn: WalletConnection;
   carbonTokenId: bigint;
   destinationAddress: string;
   amount: bigint;
@@ -377,7 +382,8 @@ export async function mintFungible(params: MintFungibleParams): Promise<MintFung
   let walletResult: { hash: string; id: number; success: boolean };
   try {
     walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
-      conn.signCarbonTransaction(
+      const signCarbonTransaction = requireSignCarbonTransaction(conn);
+      signCarbonTransaction(
         txMsg,
         (res: unknown) => {
           if (!isWalletSignResult(res)) {

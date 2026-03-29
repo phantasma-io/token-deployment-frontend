@@ -2,7 +2,6 @@ import {
   Bytes32,
   CreateSeriesFeeOptions,
   CreateTokenSeriesTxHelper,
-  EasyConnect,
   CursorPaginatedResult,
   MetadataField,
   TokenSeriesResult,
@@ -17,7 +16,12 @@ import {
 import { ensureError, toMessage } from "./errors";
 import { createApi } from "./api";
 import { waitForTransactionConfirmation } from "./tx";
-import { extractPublicKeyBytes, isWalletSignResult } from "./wallet";
+import {
+  extractPublicKeyBytes,
+  isWalletSignResult,
+  requireSignCarbonTransaction,
+  type WalletConnection,
+} from "./wallet";
 import { parseHexBytes, parseVmMetadataValue } from "./metadata";
 
 export type TokenSeriesListItem = {
@@ -121,7 +125,7 @@ export async function listTokenSeries(
 }
 
 export type CreateSeriesParams = {
-  conn: EasyConnect;
+  conn: WalletConnection;
   carbonTokenId: bigint;
   seriesSchema: VmStructSchema; // must include default fields (id, mode, rom) and any standard/custom fields
   // All series metadata values keyed by field name (excluding reserved _i/mode/rom)
@@ -232,7 +236,8 @@ export async function createSeries(params: CreateSeriesParams): Promise<CreateSe
   try {
     walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
       try {
-        conn.signCarbonTransaction(
+        const signCarbonTransaction = requireSignCarbonTransaction(conn);
+        signCarbonTransaction(
           txMsg,
           (res: unknown) => {
             if (!isWalletSignResult(res)) {

@@ -3,7 +3,6 @@
 import {
   Bytes32,
   CarbonBinaryWriter,
-  EasyConnect,
   FeeOptions,
   ModuleId,
   SmallString,
@@ -17,10 +16,11 @@ import {
   hexToBytes,
 } from "phantasma-sdk-ts";
 
-import { extractPublicKeyBytes } from "./wallet";
+import { extractPublicKeyBytes, requireSignCarbonTransaction } from "./wallet";
 import { createApi } from "./api";
 import { waitForTransactionConfirmation } from "./tx";
 import { ensureError, toMessage } from "./errors";
+import type { WalletConnection } from "./wallet";
 
 export type InfuseInstanceGroup = {
   carbonTokenId: bigint;
@@ -28,7 +28,7 @@ export type InfuseInstanceGroup = {
 };
 
 export type InfuseParams = {
-  conn: EasyConnect;
+  conn: WalletConnection;
   targetCarbonAddress: string;
   groups: InfuseInstanceGroup[];
   feeOptions?: FeeOptions;
@@ -151,7 +151,8 @@ export async function infuseNfts(params: InfuseParams): Promise<InfuseResult> {
   let walletResult: { hash: string; id: number; success: boolean };
   try {
     walletResult = await new Promise<{ hash: string; id: number; success: boolean }>((resolve, reject) => {
-      conn.signCarbonTransaction(
+      const signCarbonTransaction = requireSignCarbonTransaction(conn);
+      signCarbonTransaction(
         tx,
         (res: unknown) => {
           if (!res || typeof res !== "object") {
