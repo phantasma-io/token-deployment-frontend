@@ -88,6 +88,8 @@ const DeployPage = observer(() => {
   const hasInjectedLinkSocket =
     typeof window !== "undefined" && "PhantasmaLinkSocket" in window;
   const linkDiagnostics = phaCtx?.last_connect_diagnostics ?? null;
+  const socketHostAttempts =
+    (linkDiagnostics as { socket_host_attempts?: unknown[] } | null)?.socket_host_attempts ?? [];
   const selectedTransportMode = phaCtx?.selected_transport_mode ?? "auto";
   const availableTransports = phaCtx?.available_transports ?? [];
   const selectedTransportModeOption =
@@ -127,7 +129,13 @@ const DeployPage = observer(() => {
       failure_message: linkDiagnostics?.failure_message ?? null,
       local_socket_reachable: linkDiagnostics?.local_socket_reachable ?? null,
       injected_transport_detected: linkDiagnostics?.injected_transport_detected ?? null,
+      browser_family: linkDiagnostics?.browser_family ?? null,
+      public_origin: linkDiagnostics?.public_origin ?? null,
+      brave_loopback_permission_suspected:
+        linkDiagnostics?.brave_loopback_permission_suspected ?? false,
+      socket_host_attempts: socketHostAttempts,
       socket_transport: linkDiagnostics?.socket_transport ?? null,
+      socket_host: linkDiagnostics?.socket_host ?? null,
       socket_open: linkDiagnostics?.socket_open ?? null,
       conn_exists: !!phaCtx?.conn,
       link_exists: !!phaCtx?.conn?.link,
