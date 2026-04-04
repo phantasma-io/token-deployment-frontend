@@ -51,5 +51,5 @@ export function requireSignCarbonTransaction(
     throw new Error("Wallet does not support Carbon transaction signing");
   }
 
-  return conn.signCarbonTransaction as (...args: unknown[]) => void;
+  return conn.signCarbonTransaction.bind(conn) as (...args: unknown[]) => void;
 }

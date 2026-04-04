@@ -139,8 +139,15 @@ async function signPrebuiltTransactionCompat(
   conn: ContractLifecycleConnection,
   tx: Transaction,
 ): Promise<string> {
-  const directSigner = conn.signPrebuiltTransaction;
-  if (typeof directSigner === "function") {
+  const directSigner =
+    typeof conn.signPrebuiltTransaction === "function"
+      ? (conn.signPrebuiltTransaction.bind(conn) as (
+          tx: Transaction,
+          callback: (result: CompatibleLinkSignResult) => void,
+          onErrorCallback: (message?: string) => void,
+        ) => void)
+      : null;
+  if (directSigner !== null) {
     return await new Promise<string>((resolve, reject) => {
       directSigner(
         tx,
