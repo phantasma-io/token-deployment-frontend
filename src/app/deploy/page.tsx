@@ -36,10 +36,16 @@ const TRANSPORT_MODE_OPTIONS: Array<{
   buttonLabel: string;
   menuLabel: string;
 }> = [
-  { value: "auto", buttonLabel: "A", menuLabel: "Auto" },
-  { value: "injected", buttonLabel: "I", menuLabel: "Injected transport" },
-  { value: "local-socket", buttonLabel: "S", menuLabel: "Local socket transport" },
+  { value: "auto", buttonLabel: "Auto", menuLabel: "Auto detect" },
+  { value: "injected", buttonLabel: "Extension", menuLabel: "Browser extension" },
+  { value: "local-socket", buttonLabel: "Wallet", menuLabel: "Standalone wallet" },
 ];
+
+function getTransportModeMenuLabel(value: LinkTransportMode) {
+  return (
+    TRANSPORT_MODE_OPTIONS.find((option) => option.value === value)?.menuLabel ?? value
+  );
+}
 
 function supportsTokenSelection(tab: TokenActionTab) {
   return tab !== "deploy";
@@ -347,7 +353,7 @@ const DeployPage = observer(() => {
                     size="sm"
                     disabled={phaCtx?.is_connecting}
                     aria-label="Wallet transport mode"
-                    title={`Wallet transport mode. Detected: ${availableTransports.length > 0 ? availableTransports.join(", ") : "none"}`}
+                    title={`Wallet transport mode. Detected: ${availableTransports.length > 0 ? availableTransports.map(getTransportModeMenuLabel).join(", ") : "none"}`}
                     className="h-8 min-w-0 rounded-full px-2.5 text-[11px] shadow-xs"
                   >
                     <span>{selectedTransportModeOption.buttonLabel}</span>
