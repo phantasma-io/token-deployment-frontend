@@ -4,7 +4,7 @@ export type WalletConnection = {
   link?: {
     account?: {
       address?: string;
-    };
+    } | null;
   };
   signCarbonTransaction?: unknown;
 };
